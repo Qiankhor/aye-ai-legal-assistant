@@ -5,6 +5,8 @@ import multer from 'multer';
 import speech from '@google-cloud/speech';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import OpenAI from 'openai';
+import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime';
 
 // Load environment variables
 dotenv.config();
@@ -29,6 +31,21 @@ const speechClient = new speech.SpeechClient({
   keyFilename: join(__dirname, '../google-credentials.json'),
 });
 
+// Initialize OpenAI client
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
+// Initialize AWS Bedrock client
+const bedrockClient = new BedrockRuntimeClient({
+  region: process.env.AWS_REGION || 'us-east-1',
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+    sessionToken: process.env.AWS_SESSION_TOKEN,
+  },
+});
+
 // Middleware
 app.use(cors());
 app.use(express.json());
@@ -36,6 +53,123 @@ app.use(express.json());
 // Health check endpoint
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok' });
+});
+
+// Chat endpoint for AI legal assistant (OpenAI)
+app.post('/api/chat', async (req, res) => {
+  try {
+    const { message, conversationHistory = [] } = req.body;
+
+    if (!message) {
+      return res.status(400).json({ error: 'Message is required' });
+    }
+
+    // Convert conversation history to OpenAI format
+    const formattedHistory = conversationHistory.map(msg => ({
+      role: msg.sender === 'bot' ? 'assistant' : 'user',
+      content: msg.text
+    }));
+
+    // Create conversation context for the AI
+    const messages = [
+      {
+        role: 'system',
+        content: `You are Aye, an AI Legal Assistant. You help users with legal questions, document analysis, contract review, legal research, and provide general legal guidance. You are knowledgeable about various areas of law and can help with:
+
+- Legal document analysis and review
+- Contract explanations and suggestions
+- Legal research assistance
+- General legal questions and guidance
+- Legal form completion help
+- Legal terminology explanations
+
+Always provide helpful, accurate, and professional legal assistance. If you're unsure about something, recommend consulting with a qualified attorney for specific legal advice.`
+      },
+      ...formattedHistory,
+      {
+        role: 'user',
+        content: message
+      }
+    ];
+
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-3.5-turbo',
+      messages: messages,
+      max_tokens: 1000,
+      temperature: 0.7,
+    });
+
+    const aiResponse = completion.choices[0].message.content;
+
+    res.json({ 
+      response: aiResponse,
+      timestamp: new Date().toISOString(),
+      provider: 'openai'
+    });
+
+  } catch (error) {
+    console.error('Chat error:', error);
+    res.status(500).json({ error: 'Error processing chat request' });
+  }
+});
+
+// Chat endpoint for AI legal assistant (AWS Bedrock)
+app.post('/api/chat-bedrock', async (req, res) => {
+  try {
+    const { message, conversationHistory = [] } = req.body;
+
+    if (!message) {
+      return res.status(400).json({ error: 'Message is required' });
+    }
+
+    // Build conversation context
+    let conversationContext = `You are Aye, an AI Legal Assistant. You help users with legal questions, document analysis, contract review, legal research, and provide general legal guidance. You are knowledgeable about various areas of law and can help with:
+
+- Legal document analysis and review
+- Contract explanations and suggestions
+- Legal research assistance
+- General legal questions and guidance
+- Legal form completion help
+- Legal terminology explanations
+
+Always provide helpful, accurate, and professional legal assistance. If you're unsure about something, recommend consulting with a qualified attorney for specific legal advice.
+
+Conversation History:
+`;
+
+    // Add conversation history
+    conversationHistory.forEach(msg => {
+      conversationContext += `${msg.role}: ${msg.content}\n`;
+    });
+
+    conversationContext += `\nUser: ${message}\n\nAssistant:`;
+
+    const input = {
+      modelId: 'mistral.mistral-7b-instruct-v0:2',
+      contentType: 'application/json',
+      accept: 'application/json',
+      body: JSON.stringify({
+        prompt: conversationContext,
+        max_tokens: 1000,
+        temperature: 0.7
+      })
+    };
+
+    const command = new InvokeModelCommand(input);
+    const response = await bedrockClient.send(command);
+    const responseBody = JSON.parse(new TextDecoder().decode(response.body));
+    const aiResponse = responseBody.outputs[0].text;
+
+    res.json({ 
+      response: aiResponse,
+      timestamp: new Date().toISOString(),
+      provider: 'bedrock'
+    });
+
+  } catch (error) {
+    console.error('Bedrock chat error:', error);
+    res.status(500).json({ error: 'Error processing Bedrock chat request' });
+  }
 });
 
 // Speech to text endpoint
