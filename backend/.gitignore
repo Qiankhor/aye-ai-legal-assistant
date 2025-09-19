@@ -1,0 +1,23 @@
+# dependencies
+node_modules/
+
+# environment variables
+.env
+
+# Google Cloud credentials
+google-credentials.json
+*.json.key
+service-account.json
+
+# logs
+*.log
+npm-debug.log*
+
+# runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# misc
+.DS_Store
