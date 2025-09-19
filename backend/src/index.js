@@ -3,9 +3,15 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import multer from 'multer';
 import speech from '@google-cloud/speech';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 
 // Load environment variables
 dotenv.config();
+
+// Get current directory for ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const app = express();
 const port = process.env.PORT || 3001;
@@ -18,8 +24,10 @@ const upload = multer({
   },
 });
 
-// Initialize Google Cloud Speech client
-const speechClient = new speech.SpeechClient();
+// Initialize Google Cloud Speech client with explicit credentials
+const speechClient = new speech.SpeechClient({
+  keyFilename: join(__dirname, '../google-credentials.json'),
+});
 
 // Middleware
 app.use(cors());
