@@ -290,7 +290,7 @@ function ChatBot({
   };
 
   return (
-    <Box sx={{ width: '100%', height: '100vh', display: 'flex', flexDirection: 'column' }}>
+    <Box sx={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
       {/* Header */}
       <Paper elevation={2} sx={{ p: 2, borderRadius: 0 }}>
         <Typography variant="h4" component="h1" align="center" color="primary" gutterBottom>
