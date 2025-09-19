@@ -22,6 +22,9 @@ function App() {
         startRecording={viewModel.startRecording}
         stopRecording={viewModel.stopRecording}
         handleFileUpload={viewModel.handleFileUpload}
+        selectedLanguage={viewModel.selectedLanguage}
+        setSelectedLanguage={viewModel.setSelectedLanguage}
+        LANGUAGES={viewModel.LANGUAGES}
       />
     </div>
   );
