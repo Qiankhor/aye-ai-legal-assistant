@@ -15,6 +15,7 @@ function App() {
         messages={viewModel.messages}
         input={viewModel.input}
         isRecording={viewModel.isRecording}
+        isLoading={viewModel.isLoading}
         handleSend={viewModel.handleSend}
         handleInputChange={viewModel.handleInputChange}
         handleInputKeyDown={viewModel.handleInputKeyDown}
