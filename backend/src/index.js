@@ -409,7 +409,7 @@ async function generateDocumentSummaryForAnalysis(formFields, documentName) {
   }
 }
 
-// Generate questions for missing information using Mistral
+// Generate questions for missing information using OpenAI or fallback
 async function generateQuestionsForDocument(formFields, documentName) {
   try {
     const emptyFields = formFields.filter(field => !field.value || field.value.trim() === '');
@@ -418,47 +418,77 @@ async function generateQuestionsForDocument(formFields, documentName) {
       return [];
     }
 
-    const prompt = `You are analyzing a legal document called "${documentName}". 
-    The following fields were found but are empty or need clarification:
-    
-    ${emptyFields.map(field => `- ${field.key}`).join('\n')}
-    
-    Generate specific, clear questions to ask the user to fill in these missing fields. 
-    Make the questions professional and legal-appropriate. Return as a JSON array of question objects with this format:
-    [{"field": "field_name", "question": "What is your full name?", "type": "text", "required": true}]
-    
-    Field types can be: text, email, phone, date, number, address, or select.
-    For select type, include an "options" array.
-    
-    Make sure the questions are directly related to the actual fields found in the document.`;
+    // Try OpenAI first
+    try {
+      const prompt = `You are analyzing a legal document called "${documentName}". 
+      The following fields were found but are empty or need clarification:
+      
+      ${emptyFields.map(field => `- ${field.key}`).join('\n')}
+      
+      Generate specific, clear questions to ask the user to fill in these missing fields. 
+      Make the questions professional and legal-appropriate. Return ONLY a JSON array of question objects with this exact format:
+      [{"field": "field_name", "question": "What is your full name?", "type": "text", "required": true}]
+      
+      Field types can be: text, email, phone, date, number, address, or select.
+      For select type, include an "options" array.
+      
+      Make sure the questions are directly related to the actual fields found in the document.
+      Return ONLY the JSON array, no other text.`;
 
-    const input = {
-      modelId: 'mistral.mistral-7b-instruct-v0:2',
-      contentType: 'application/json',
-      accept: 'application/json',
-      body: JSON.stringify({
-        prompt: prompt,
+      const completion = await openai.chat.completions.create({
+        model: 'gpt-3.5-turbo',
+        messages: [{ role: 'user', content: prompt }],
         max_tokens: 1000,
-        temperature: 0.3
-      })
-    };
+        temperature: 0.3,
+      });
 
-    const command = new InvokeModelCommand(input);
-    const response = await bedrockClient.send(command);
-    const responseBody = JSON.parse(new TextDecoder().decode(response.body));
-    
-    // Extract JSON from the response text
-    let responseText = responseBody.outputs[0].text;
-    
-    // Try to find JSON array in the response
-    const jsonMatch = responseText.match(/\[[\s\S]*\]/);
-    if (jsonMatch) {
-      return JSON.parse(jsonMatch[0]);
+      const responseText = completion.choices[0].message.content.trim();
+      
+      // Try to parse JSON from OpenAI response
+      const jsonMatch = responseText.match(/\[[\s\S]*\]/);
+      if (jsonMatch) {
+        return JSON.parse(jsonMatch[0]);
+      }
+      
+      console.warn('No valid JSON found in OpenAI response:', responseText);
+    } catch (openaiError) {
+      console.warn('OpenAI question generation failed, using fallback:', openaiError.message);
     }
+
+    // Fallback: Generate simple questions based on field names
+    return emptyFields.map(field => {
+      const fieldName = field.key.toLowerCase();
+      let question = `What is your ${field.key.toLowerCase()}?`;
+      let type = 'text';
+      
+      if (fieldName.includes('email')) {
+        question = `What is your email address?`;
+        type = 'email';
+      } else if (fieldName.includes('phone')) {
+        question = `What is your phone number?`;
+        type = 'phone';
+      } else if (fieldName.includes('date') || fieldName.includes('birth')) {
+        question = `What is your ${field.key.toLowerCase()}?`;
+        type = 'date';
+      } else if (fieldName.includes('name')) {
+        question = `What is your full name?`;
+      } else if (fieldName.includes('address')) {
+        question = `What is your address?`;
+        type = 'address';
+      } else if (fieldName.includes('company')) {
+        question = `What is your company name?`;
+      } else if (fieldName.includes('position') || fieldName.includes('title')) {
+        question = `What is your job title or position?`;
+      }
+      
+      return {
+        field: field.key,
+        question: question,
+        type: type,
+        required: true
+      };
+    });
     
-    // Fallback: return empty array if no valid JSON found
-    console.warn('No valid JSON found in Mistral response:', responseText);
-    return [];
   } catch (error) {
     console.error('Error generating questions:', error);
     return [];
