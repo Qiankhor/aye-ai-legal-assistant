@@ -19,6 +19,7 @@ import ChatIcon from '@mui/icons-material/Chat';
 import DescriptionIcon from '@mui/icons-material/Description';
 import CompareArrowsIcon from '@mui/icons-material/CompareArrows';
 import SettingsIcon from '@mui/icons-material/Settings';
+import SmartToyIcon from '@mui/icons-material/SmartToy';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 
 const drawerWidth = 260;
@@ -59,18 +60,14 @@ export default function DashboardLayout() {
   const drawer = (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <Box sx={{ p: 2, backgroundImage: 'linear-gradient(180deg, rgba(135,206,250,0.15), rgba(255,255,255,0))' }}>
-        <Typography variant="h6" color="primary" sx={{ fontWeight: 700 }}>
-          AYE Legal Assistant
-        </Typography>
-        <Typography variant="caption" color="text.secondary">
-          Making legal simple
-        </Typography>
+        
       </Box>
       <Divider />
       <Box sx={{ flex: 1, overflowY: 'auto' }}>
         <List sx={{ mt: 1 }}>
-          <NavItem to="/home" icon={<HomeIcon />} label="Home / Overview" onClick={() => setMobileOpen(false)} />
-          <NavItem to="/chat" icon={<ChatIcon />} label="Chatbot & Guided Q&A" onClick={() => setMobileOpen(false)} />
+          <NavItem to="/home" icon={<HomeIcon />} label="Home" onClick={() => setMobileOpen(false)} />
+          <NavItem to="/chat" icon={<ChatIcon />} label="Chatbot" onClick={() => setMobileOpen(false)} />
+          <NavItem to="/ai-workspace" icon={<SmartToyIcon />} label="Workspace" onClick={() => setMobileOpen(false)} />
           <NavItem to="/templates" icon={<DescriptionIcon />} label="Templates Library" onClick={() => setMobileOpen(false)} />
           <NavItem to="/compare" icon={<CompareArrowsIcon />} label="Compare" onClick={() => setMobileOpen(false)} />
         </List>
@@ -105,7 +102,8 @@ export default function DashboardLayout() {
           zIndex: (theme) => theme.zIndex.drawer + 1,
           backgroundImage: 'linear-gradient(90deg, #87cefa 0%, #bde3ff 100%)',
           color: '#0b2340',
-          boxShadow: '0 2px 10px rgba(135,206,250,0.4)'
+          boxShadow: '0 2px 10px rgba(135,206,250,0.4)',
+          width: '100%' // Ensure AppBar spans full width
         }}
       >
         <Toolbar>
@@ -134,7 +132,7 @@ export default function DashboardLayout() {
 
       <Box
         component="nav"
-        sx={{ width: { sm: desktopOpen ? drawerWidth : 0 }, flexShrink: { sm: 0 } }}
+        sx={{ width: 0, flexShrink: 0 }} // Remove width since drawer is positioned absolutely
         aria-label="sidebar navigation"
       >
         <Drawer
@@ -150,7 +148,9 @@ export default function DashboardLayout() {
               backgroundColor: '#ffffff',
               backgroundImage: 'linear-gradient(180deg, rgba(135,206,250,0.08), rgba(255,255,255,0))',
               borderRight: '1px solid',
-              borderColor: 'divider'
+              borderColor: 'divider',
+              top: '64px', // Position under AppBar
+              height: 'calc(100vh - 64px)' // Adjust height
             }
           }}
         >
@@ -168,7 +168,9 @@ export default function DashboardLayout() {
               borderRight: '1px solid',
               borderColor: 'divider',
               transition: 'width 0.3s ease',
-              overflow: 'hidden'
+              overflow: 'hidden',
+              top: '20px', // Position under AppBar
+              height: 'calc(100vh - 64px)' // Adjust height
             }
           }}
           open={desktopOpen}
@@ -179,17 +181,15 @@ export default function DashboardLayout() {
 
       <Box component="main" sx={{ 
         flexGrow: 1, 
-        p: { xs: 2, sm: 3 }, 
-        width: { sm: desktopOpen ? `calc(100% - ${drawerWidth}px)` : '100%' }, 
-        display: 'flex', 
-        flexDirection: 'column', 
-        minHeight: '100vh',
-        transition: 'width 0.3s ease'
+        p: { xs: 1, sm: 2 }, 
+        width: '100%',
+        transition: 'margin-left 0.3s ease',
+        marginLeft: { sm: desktopOpen ? `${drawerWidth}px` : 0 },
+        marginTop: '64px',
+        minHeight: 'calc(100vh - 64px)', // Minimum height to fill viewport
+        overflowY: 'auto' // Allow vertical scrolling
       }}>
-        <Toolbar />
-        <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-          <Outlet />
-        </Box>
+        <Outlet />
       </Box>
     </Box>
   );

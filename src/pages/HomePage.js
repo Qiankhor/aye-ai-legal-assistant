@@ -1032,7 +1032,7 @@ export default function HomePage({ chatViewModel }) {
     setSelectedText(text);
     setAiAgentOpen(true);
     if (text && viewModel && viewModel.prefillInput) {
-      viewModel.prefillInput(`Please analyze this text from the document: "${text}"`);
+      viewModel.prefillInput(`"${text}"`);
     }
   };
 
