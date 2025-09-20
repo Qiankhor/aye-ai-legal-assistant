@@ -57,6 +57,8 @@ class ConfigService {
         },
       });
 
+      // Gemini removed. Using OpenAI and Bedrock only.
+
       console.log('✅ All external service clients initialized successfully');
     } catch (error) {
       console.error('❌ Error initializing service clients:', error);
@@ -78,6 +80,8 @@ class ConfigService {
     return this.openaiClient;
   }
 
+  // Gemini support removed
+
   getBedrockClient() {
     if (!this.bedrockClient) {
       throw new Error('Bedrock client not initialized');
@@ -94,9 +98,9 @@ class ConfigService {
 
   // Check if AWS credentials are properly configured
   isAWSConfigured() {
-    return process.env.AWS_ACCESS_KEY_ID && 
-           process.env.AWS_ACCESS_KEY_ID !== 'YOUR_NEW_ACCESS_KEY' && 
-           process.env.AWS_ACCESS_KEY_ID !== 'ASIA4L423TSC6BE7DXKY';
+    return process.env.AWS_ACCESS_KEY_ID &&
+      process.env.AWS_ACCESS_KEY_ID !== 'YOUR_NEW_ACCESS_KEY' &&
+      process.env.AWS_ACCESS_KEY_ID !== 'ASIA4L423TSC6BE7DXKY';
   }
 }
 

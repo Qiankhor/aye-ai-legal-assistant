@@ -24,32 +24,18 @@ import NavigateBeforeIcon from '@mui/icons-material/NavigateBefore';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import DeleteIcon from '@mui/icons-material/Delete';
 import DescriptionIcon from '@mui/icons-material/Description';
+import ChatBot from '../ChatBot';
+import { useDocChatViewModel } from '../DocChatViewModel';
 
 
-function AIAgentSidebar({ open, onClose, selectedText, onTextProcessed, onWidthChange }) {
-  const [messages, setMessages] = useState([
-    { id: 1, type: 'agent', text: 'Hello! I\'m your AI Legal Agent. I can help you with document analysis, contract reviews, and legal research. How can I assist you today?', timestamp: '10:30 AM' },
-    { id: 2, type: 'user', text: 'Can you analyze the risk in my latest NDA?', timestamp: '10:32 AM' },
-    { id: 3, type: 'agent', text: 'I\'ve analyzed your NDA document. I found 2 medium-risk clauses related to intellectual property and 1 high-risk auto-renewal clause. Would you like me to provide detailed recommendations?', timestamp: '10:33 AM' }
-  ]);
-  const [newMessage, setNewMessage] = useState('');
-  const [agentStatus, setAgentStatus] = useState('active');
+function AIAgentSidebar({ open, onClose, selectedText, onTextProcessed, onWidthChange, viewModel }) {
   const [sidebarWidth, setSidebarWidth] = useState(() => {
-    // Get saved width from localStorage or use default
     const savedWidth = localStorage.getItem('aiAgentSidebarWidth');
     return savedWidth ? parseInt(savedWidth) : 400;
   });
   const [isResizing, setIsResizing] = useState(false);
 
-  // Handle selected text from PDF
-  useEffect(() => {
-    if (selectedText && selectedText.trim()) {
-      setNewMessage(`Please analyze this text from the PDF: "${selectedText}"`);
-      if (onTextProcessed) {
-        onTextProcessed();
-      }
-    }
-  }, [selectedText, onTextProcessed]);
+  // No auto-send; sending happens when user clicks the floating "Ask AI" button
 
   // Notify parent of width changes when sidebar opens
   useEffect(() => {
@@ -106,29 +92,7 @@ function AIAgentSidebar({ open, onClose, selectedText, onTextProcessed, onWidthC
     };
   }, [isResizing]);
 
-  const handleSendMessage = () => {
-    if (newMessage.trim()) {
-      const userMessage = {
-        id: messages.length + 1,
-        type: 'user',
-        text: newMessage,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      };
-      setMessages([...messages, userMessage]);
-      setNewMessage('');
-      
-      // Simulate AI response
-      setTimeout(() => {
-        const agentResponse = {
-          id: messages.length + 2,
-          type: 'agent',
-          text: 'I\'m processing your request. Let me analyze the relevant documents and provide you with a comprehensive response.',
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        };
-        setMessages(prev => [...prev, agentResponse]);
-      }, 1000);
-    }
-  };
+  //
 
   return (
       <Drawer
@@ -186,17 +150,10 @@ function AIAgentSidebar({ open, onClose, selectedText, onTextProcessed, onWidthC
                 <AutoAwesomeIcon />
               </Avatar>
               <Box>
-                <Typography variant="h6" sx={{ fontWeight: 600 }}>AI Legal Agent</Typography>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Chip 
-                    size="small" 
-                    color={agentStatus === 'active' ? 'success' : 'default'} 
-                    label={agentStatus === 'active' ? 'Active' : 'Offline'} 
-                  />
-                  <Typography variant="caption" color="text.secondary">
-                    {agentStatus === 'active' ? 'Ready to assist' : 'Currently offline'}
-                  </Typography>
-                </Box>
+                <Typography variant="h6" sx={{ fontWeight: 600 }}>Chatbot & Guided Q&A</Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Powered by your AI Legal Assistant
+                </Typography>
               </Box>
             </Box>
             <IconButton onClick={onClose}>
@@ -205,74 +162,23 @@ function AIAgentSidebar({ open, onClose, selectedText, onTextProcessed, onWidthC
           </Box>
         </Box>
 
-        {/* Messages */}
-        <Box sx={{ flex: 1, overflow: 'auto', p: 1 }}>
-          {messages.map((message) => (
-            <Box
-              key={message.id}
-              sx={{
-                mb: 2,
-                display: 'flex',
-                justifyContent: message.type === 'user' ? 'flex-end' : 'flex-start'
-              }}
-            >
-              <Box
-                sx={{
-                  maxWidth: '80%',
-                  p: 1.5,
-                  borderRadius: 2,
-                  bgcolor: message.type === 'user' ? 'primary.main' : 'grey.100',
-                  color: message.type === 'user' ? 'white' : 'text.primary'
-                }}
-              >
-                <Typography variant="body2">{message.text}</Typography>
-                <Typography 
-                  variant="caption" 
-                  sx={{ 
-                    opacity: 0.7, 
-                    display: 'block', 
-                    textAlign: 'right', 
-                    mt: 0.5 
-                  }}
-                >
-                  {message.timestamp}
-                </Typography>
-              </Box>
-            </Box>
-          ))}
-        </Box>
-
-        {/* Input */}
-        <Box sx={{ p: 2, borderTop: 1, borderColor: 'divider' }}>
-          <Box sx={{ display: 'flex', gap: 1 }}>
-            <TextField
-              fullWidth
-              size="small"
-              placeholder="Ask the AI agent..."
-              value={newMessage}
-              onChange={(e) => setNewMessage(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-              disabled={agentStatus !== 'active'}
-            />
-            <IconButton 
-              color="primary" 
-              onClick={handleSendMessage}
-              disabled={agentStatus !== 'active' || !newMessage.trim()}
-            >
-              <SendIcon />
-            </IconButton>
-          </Box>
-          <Box sx={{ mt: 1, display: 'flex', gap: 1 }}>
-            <Button 
-              size="small" 
-              variant="outlined"
-              startIcon={agentStatus === 'active' ? <PauseIcon /> : <PlayArrowIcon />}
-              onClick={() => setAgentStatus(agentStatus === 'active' ? 'offline' : 'active')}
-            >
-              {agentStatus === 'active' ? 'Pause' : 'Activate'}
-            </Button>
-            <Button size="small" variant="text">Clear Chat</Button>
-          </Box>
+        {/* ChatBot Content */}
+        <Box sx={{ flex: 1, minHeight: 0, p: 0 }}>
+          <ChatBot
+            messages={viewModel.messages}
+            input={viewModel.input}
+            isRecording={viewModel.isRecording}
+            isLoading={viewModel.isLoading}
+            handleSend={viewModel.handleSend}
+            handleInputChange={viewModel.handleInputChange}
+            handleInputKeyDown={viewModel.handleInputKeyDown}
+            startRecording={viewModel.startRecording}
+            stopRecording={viewModel.stopRecording}
+            handleFileUpload={viewModel.handleFileUpload}
+            selectedLanguage={viewModel.selectedLanguage}
+            setSelectedLanguage={viewModel.setSelectedLanguage}
+            LANGUAGES={viewModel.LANGUAGES}
+          />
         </Box>
         </Box>
       </Box>
@@ -938,7 +844,7 @@ function PDFViewer({ pdfFile, onClose, onTextSelect }) {
   );
 }
 
-export default function HomePage() {
+export default function HomePage({ chatViewModel }) {
   const [aiAgentOpen, setAiAgentOpen] = useState(false);
   const [uploadedFile, setUploadedFile] = useState(null);
   const [fileType, setFileType] = useState(null); // 'pdf' or 'doc'
@@ -946,6 +852,9 @@ export default function HomePage() {
   const [selectedText, setSelectedText] = useState('');
   const [sidebarWidth, setSidebarWidth] = useState(400);
   const fileInputRef = useRef(null);
+  // Use document-grounded chatbot view model for Home/Overview
+  const internalViewModel = useDocChatViewModel();
+  const viewModel = chatViewModel ?? internalViewModel;
 
   // Load PDF.js library and CSS
   useEffect(() => {
@@ -1070,6 +979,9 @@ export default function HomePage() {
       const file = validFiles[0];
       setUploadedFile(file);
       setFileType(getFileType(file));
+      if (viewModel && viewModel.startSessionWithFile) {
+        viewModel.startSessionWithFile(file);
+      }
     } else {
       // Check if it's a DOC file specifically
       const hasDocFile = files.some(file => 
@@ -1092,6 +1004,9 @@ export default function HomePage() {
     if (file && isValidFileType(file)) {
       setUploadedFile(file);
       setFileType(getFileType(file));
+      if (viewModel && viewModel.startSessionWithFile) {
+        viewModel.startSessionWithFile(file);
+      }
     } else if (file) {
       // Provide specific error messages
       if (file.name.toLowerCase().endsWith('.doc') || file.type === 'application/msword') {
@@ -1116,7 +1031,9 @@ export default function HomePage() {
   const handleTextSelect = (text) => {
     setSelectedText(text);
     setAiAgentOpen(true);
-    // The AI agent will automatically receive the selected text
+    if (text && viewModel && viewModel.prefillInput) {
+      viewModel.prefillInput(`Please analyze this text from the document: "${text}"`);
+    }
   };
 
   return (
@@ -1244,6 +1161,7 @@ export default function HomePage() {
         selectedText={selectedText}
         onTextProcessed={() => setSelectedText('')}
         onWidthChange={setSidebarWidth}
+        viewModel={viewModel}
       />
     </Box>
   );

@@ -7,6 +7,7 @@ import chatRoutes from './routes/chatRoutes.js';
 import speechRoutes from './routes/speechRoutes.js';
 import documentRoutes from './routes/documentRoutes.js';
 import qaRoutes from './routes/qaRoutes.js';
+import docChatRoutes from './routes/docChatRoutes.js';
 
 // Import services to initialize them
 import { configService } from './config/clients.js';
@@ -41,6 +42,7 @@ app.use('/api', chatRoutes);
 app.use('/api', speechRoutes);
 app.use('/api/documents', documentRoutes);
 app.use('/api/qa', qaRoutes);
+app.use('/api', docChatRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
@@ -74,6 +76,9 @@ const server = app.listen(port, () => {
   console.log(`   POST /api/documents/generate - Generate document`);
   console.log(`   POST /api/qa/sessions - Create Q&A session`);
   console.log(`   GET  /api/qa/sessions/:id/progress - Session progress`);
+  console.log(`   POST /api/doc-chat/sessions/upload - Create doc chat session via upload`);
+  console.log(`   POST /api/doc-chat/sessions/text - Create doc chat session via text`);
+  console.log(`   POST /api/doc-chat/:sessionId/ask - Ask question grounded in doc`);
 });
 
 // Handle graceful shutdown

@@ -254,6 +254,20 @@ Would you like me to help you complete this document? I can guide you through fi
     await processTextMessage(currentInput);
   };
 
+  // Programmatically send a text message into the chatbot (used by floating Ask AI)
+  const sendDirectText = async (messageText) => {
+    if (!messageText || !messageText.trim()) return;
+    const userMessage = { sender: 'user', text: messageText };
+    setMessages(prev => [...prev, userMessage]);
+    await processTextMessage(messageText);
+  };
+
+  // Prefill the input field without sending (used by floating Ask AI)
+  const prefillInput = (messageText) => {
+    if (typeof messageText !== 'string') return;
+    setInput(messageText);
+  };
+
   const handleInputChange = (e) => setInput(e.target.value);
   const handleInputKeyDown = (e) => { if (e.key === 'Enter') handleSend(); };
 
@@ -477,6 +491,8 @@ Would you like me to help you complete this document? I can guide you through fi
     handleInputKeyDown,
     startRecording,
     stopRecording,
-    handleFileUpload
+    handleFileUpload,
+    sendDirectText,
+    prefillInput
   };
 }
