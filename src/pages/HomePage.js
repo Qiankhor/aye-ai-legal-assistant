@@ -49,7 +49,6 @@ export default function HomePage() {
               <Typography variant="h6" sx={{ mb: 1, fontWeight: 600 }}>Quick Actions</Typography>
               <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
                 <Button variant="contained" onClick={() => navigate('/chat')}>Ask the Chatbot</Button>
-                <Button variant="outlined" onClick={() => navigate('/scanner')}>Scan a Document</Button>
                 <Button variant="outlined" onClick={() => navigate('/compare')}>Compare Contracts</Button>
                 <Button variant="outlined" onClick={() => navigate('/templates')}>Browse Templates</Button>
               </Box>

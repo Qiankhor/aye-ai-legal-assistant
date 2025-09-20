@@ -7,9 +7,7 @@ import DashboardLayout from './components/DashboardLayout';
 import HomePage from './pages/HomePage';
 import ChatbotPage from './pages/ChatbotPage';
 import TemplatesPage from './pages/TemplatesPage';
-import ScannerPage from './pages/ScannerPage';
 import ComparePage from './pages/ComparePage';
-import TrackerPage from './pages/TrackerPage';
 import SettingsPage from './pages/SettingsPage';
 import '@fontsource/roboto/300.css';
 import '@fontsource/roboto/400.css';
@@ -43,9 +41,7 @@ function App() {
           </ChatbotPage>
         } />
         <Route path="templates" element={<TemplatesPage />} />
-        <Route path="scanner" element={<ScannerPage />} />
         <Route path="compare" element={<ComparePage />} />
-        <Route path="tracker" element={<TrackerPage />} />
         <Route path="settings" element={<SettingsPage />} />
         <Route path="*" element={<Navigate to="/home" replace />} />
       </Route>
