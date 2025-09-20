@@ -37,7 +37,7 @@ const DocumentGenerator = ({
     setError(null);
 
     try {
-      const response = await fetch('http://localhost:3001/api/documents/generate-document', {
+      const response = await fetch('http://localhost:5001/api/documents/generate-document', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
