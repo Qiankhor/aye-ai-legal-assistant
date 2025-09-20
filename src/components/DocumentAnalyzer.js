@@ -42,7 +42,7 @@ const DocumentAnalyzer = ({ onAnalysisComplete, onQuestionsGenerated }) => {
     formData.append('document', file);
 
     try {
-      const response = await fetch('http://localhost:5001/api/documents/upload', {
+      const response = await fetch('http://localhost:3001/api/documents/analyze', {
         method: 'POST',
         body: formData,
       });
@@ -50,11 +50,12 @@ const DocumentAnalyzer = ({ onAnalysisComplete, onQuestionsGenerated }) => {
       const data = await response.json();
 
       if (data.success) {
-        setAnalysis(data.analysis);
-        onAnalysisComplete(data.analysis, data.documentType);
+        setAnalysis(data);
+        onAnalysisComplete(data, data.documentName);
         
-        // Generate questions
-        await generateQuestions(data.analysis, data.documentType);
+        // Set questions from the analysis
+        setQuestions(data.questions || []);
+        onQuestionsGenerated(data.questions || []);
       } else {
         setError(data.error || 'Failed to analyze document');
       }
@@ -68,7 +69,7 @@ const DocumentAnalyzer = ({ onAnalysisComplete, onQuestionsGenerated }) => {
 
   const generateQuestions = async (analysis, documentType) => {
     try {
-      const response = await fetch('http://localhost:5001/api/documents/generate-questions', {
+      const response = await fetch('http://localhost:3001/api/documents/generate-questions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -87,44 +88,12 @@ const DocumentAnalyzer = ({ onAnalysisComplete, onQuestionsGenerated }) => {
     }
   };
 
-  const parseAnalysis = (analysisText) => {
-    // Simple parsing to extract structured information
-    const sections = analysisText.split('\n').filter(line => line.trim());
-    const result = {
-      summary: '',
-      documentType: '',
-      parties: [],
-      keyTerms: [],
-      risks: [],
-      dates: [],
-      requiredInfo: []
-    };
-
-    let currentSection = '';
-    sections.forEach(line => {
-      if (line.toLowerCase().includes('summary')) {
-        currentSection = 'summary';
-      } else if (line.toLowerCase().includes('document type')) {
-        currentSection = 'documentType';
-      } else if (line.toLowerCase().includes('parties')) {
-        currentSection = 'parties';
-      } else if (line.toLowerCase().includes('terms')) {
-        currentSection = 'keyTerms';
-      } else if (line.toLowerCase().includes('risk')) {
-        currentSection = 'risks';
-      } else if (line.toLowerCase().includes('date')) {
-        currentSection = 'dates';
-      } else if (line.toLowerCase().includes('required')) {
-        currentSection = 'requiredInfo';
-      } else if (line.trim() && currentSection) {
-        result[currentSection].push(line.trim());
-      }
-    });
-
-    return result;
-  };
-
-  const parsedAnalysis = analysis ? parseAnalysis(analysis) : null;
+  const parsedAnalysis = analysis ? {
+    documentName: analysis.documentName,
+    formFields: analysis.formFields || [],
+    questions: analysis.questions || [],
+    analysis: analysis.analysis || {}
+  } : null;
 
   return (
     <Box sx={{ maxWidth: 800, mx: 'auto', p: 2 }}>
@@ -183,125 +152,130 @@ const DocumentAnalyzer = ({ onAnalysisComplete, onQuestionsGenerated }) => {
             <CardContent>
               <Typography variant="h6" gutterBottom color="primary">
                 <CheckIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
-                Document Summary
+                Document Analysis Complete
               </Typography>
-              <Typography variant="body1">
-                {parsedAnalysis.summary.join(' ') || 'Summary not available'}
+              <Typography variant="body1" sx={{ mb: 2 }}>
+                Successfully analyzed "{parsedAnalysis.documentName}" and found {parsedAnalysis.formFields.length} form fields.
               </Typography>
+              
+              {/* AI Document Summary */}
+              {analysis.documentSummary && (
+                <Box sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 1, mt: 2 }}>
+                  <Typography variant="h6" gutterBottom color="primary">
+                    <GavelIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
+                    AI Document Summary
+                  </Typography>
+                  <Typography variant="body1" sx={{ whiteSpace: 'pre-line' }}>
+                    {analysis.documentSummary}
+                  </Typography>
+                </Box>
+              )}
             </CardContent>
           </Card>
 
-          {/* Key Information Grid */}
-          <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 2, mb: 3 }}>
-            {/* Document Type */}
+          {/* Analysis Statistics */}
+          <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 2, mb: 3 }}>
             <Card>
               <CardContent>
                 <Typography variant="h6" gutterBottom color="primary">
                   <GavelIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
-                  Document Type
+                  Total Fields
                 </Typography>
-                <Chip 
-                  label={parsedAnalysis.documentType.join(' ') || 'Unknown'} 
-                  color="primary" 
-                  variant="outlined" 
-                />
+                <Typography variant="h4" color="primary">
+                  {parsedAnalysis.analysis.totalFields || 0}
+                </Typography>
               </CardContent>
             </Card>
 
-            {/* Key Parties */}
+            <Card>
+              <CardContent>
+                <Typography variant="h6" gutterBottom color="error">
+                  <WarningIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
+                  Empty Fields
+                </Typography>
+                <Typography variant="h4" color="error">
+                  {parsedAnalysis.analysis.emptyFields || 0}
+                </Typography>
+              </CardContent>
+            </Card>
+
             <Card>
               <CardContent>
                 <Typography variant="h6" gutterBottom color="primary">
-                  <PersonIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
-                  Key Parties
+                  <CheckIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
+                  Confidence
                 </Typography>
-                <List dense>
-                  {parsedAnalysis.parties.slice(0, 3).map((party, index) => (
-                    <ListItem key={index} sx={{ py: 0 }}>
-                      <ListItemText primary={party} />
-                    </ListItem>
-                  ))}
-                </List>
+                <Typography variant="h4" color="primary">
+                  {Math.round(parsedAnalysis.analysis.confidence || 0)}%
+                </Typography>
               </CardContent>
             </Card>
           </Box>
 
-          {/* Important Terms */}
+          {/* Form Fields Found */}
           <Card sx={{ mb: 3 }}>
             <CardContent>
               <Typography variant="h6" gutterBottom color="primary">
-                Important Terms & Conditions
+                Form Fields Detected
               </Typography>
               <List>
-                {parsedAnalysis.keyTerms.slice(0, 5).map((term, index) => (
+                {parsedAnalysis.formFields.slice(0, 10).map((field, index) => (
                   <ListItem key={index}>
                     <ListItemIcon>
-                      <CheckIcon color="primary" />
+                      {field.value && field.value.trim() ? (
+                        <CheckIcon color="success" />
+                      ) : (
+                        <WarningIcon color="warning" />
+                      )}
                     </ListItemIcon>
-                    <ListItemText primary={term} />
+                    <ListItemText 
+                      primary={field.key}
+                      secondary={field.value || 'Empty - needs to be filled'}
+                    />
                   </ListItem>
                 ))}
+                {parsedAnalysis.formFields.length > 10 && (
+                  <ListItem>
+                    <ListItemText 
+                      primary={`... and ${parsedAnalysis.formFields.length - 10} more fields`}
+                      secondary="Scroll down to see all fields"
+                    />
+                  </ListItem>
+                )}
               </List>
             </CardContent>
           </Card>
 
-          {/* Potential Risks */}
-          {parsedAnalysis.risks.length > 0 && (
-            <Card sx={{ mb: 3 }}>
-              <CardContent>
-                <Typography variant="h6" gutterBottom color="error">
-                  <WarningIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
-                  Potential Risks & Concerns
-                </Typography>
-                <List>
-                  {parsedAnalysis.risks.slice(0, 5).map((risk, index) => (
-                    <ListItem key={index}>
-                      <ListItemIcon>
-                        <WarningIcon color="error" />
-                      </ListItemIcon>
-                      <ListItemText primary={risk} />
-                    </ListItem>
-                  ))}
-                </List>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Key Dates */}
-          {parsedAnalysis.dates.length > 0 && (
+          {/* Questions Generated */}
+          {parsedAnalysis.questions.length > 0 && (
             <Card sx={{ mb: 3 }}>
               <CardContent>
                 <Typography variant="h6" gutterBottom color="primary">
-                  <ScheduleIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
-                  Important Dates
+                  Questions to Complete Document
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  We've generated {parsedAnalysis.questions.length} questions to help you fill in the missing information.
                 </Typography>
                 <List>
-                  {parsedAnalysis.dates.slice(0, 5).map((date, index) => (
-                    <ListItem key={index}>
-                      <ListItemText primary={date} />
-                    </ListItem>
-                  ))}
-                </List>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Required Information */}
-          {parsedAnalysis.requiredInfo.length > 0 && (
-            <Card sx={{ mb: 3 }}>
-              <CardContent>
-                <Typography variant="h6" gutterBottom color="primary">
-                  Information Required for Completion
-                </Typography>
-                <List>
-                  {parsedAnalysis.requiredInfo.slice(0, 5).map((info, index) => (
+                  {parsedAnalysis.questions.slice(0, 5).map((question, index) => (
                     <ListItem key={index}>
                       <ListItemIcon>
                         <CheckIcon color="primary" />
                       </ListItemIcon>
-                      <ListItemText primary={info} />
+                      <ListItemText 
+                        primary={question.question}
+                        secondary={`Field: ${question.field} | Type: ${question.type}`}
+                      />
                     </ListItem>
                   ))}
+                  {parsedAnalysis.questions.length > 5 && (
+                    <ListItem>
+                      <ListItemText 
+                        primary={`... and ${parsedAnalysis.questions.length - 5} more questions`}
+                        secondary="Answer all questions to complete the document"
+                      />
+                    </ListItem>
+                  )}
                 </List>
               </CardContent>
             </Card>
@@ -313,8 +287,10 @@ const DocumentAnalyzer = ({ onAnalysisComplete, onQuestionsGenerated }) => {
             Next Steps
           </Typography>
           <Typography variant="body1" sx={{ mb: 2 }}>
-            Based on the analysis, we'll now ask you some questions to help complete this document. 
-            Please answer each question carefully to ensure accuracy.
+            {parsedAnalysis.questions.length > 0 
+              ? `We've identified ${parsedAnalysis.questions.length} questions that need to be answered to complete this document. Please proceed to answer these questions.`
+              : 'This document appears to be complete or no additional information is needed.'
+            }
           </Typography>
         </Box>
       )}
