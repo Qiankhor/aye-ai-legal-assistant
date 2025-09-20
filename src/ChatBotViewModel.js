@@ -144,7 +144,7 @@ Would you like me to help you complete this document? I can guide you through fi
         const formData = new FormData();
         formData.append('document', file);
 
-        const response = await fetch('http://localhost:5001/api/documents/upload', {
+        const response = await fetch('http://localhost:3001/api/documents/upload', {
           method: 'POST',
           body: formData,
         });
@@ -218,7 +218,7 @@ Would you like me to help you complete this document? I can guide you through fi
         text: msg.text
       }));
 
-      const response = await axios.post('http://localhost:5001/api/chat/message', {
+      const response = await axios.post('http://localhost:3001/api/chat', {
         message: messageText,
         conversationHistory: conversationHistory
       });
@@ -346,7 +346,7 @@ Would you like me to help you complete this document? I can guide you through fi
     }]);
 
     try {
-      const response = await axios.post('http://localhost:5001/api/documents/generate-questions', {
+      const response = await axios.post('http://localhost:3001/api/documents/generate-questions', {
         analysis: documentAnalysisData.analysis,
         documentType: documentAnalysisData.documentType
       });
@@ -410,7 +410,7 @@ Would you like me to help you complete this document? I can guide you through fi
       }]);
 
       try {
-        const response = await axios.post('http://localhost:5001/api/documents/generate-document', {
+        const response = await axios.post('http://localhost:3001/api/documents/generate-document', {
           analysis: documentAnalysisData.analysis,
           answers: newAnswers,
           documentType: documentAnalysisData.documentType
