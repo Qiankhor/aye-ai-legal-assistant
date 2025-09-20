@@ -50,10 +50,10 @@ export function useChatBotViewModel() {
   const audioChunks = useRef([]);
 
   // Function to format document analysis for better display
-  const formatDocumentAnalysis = useCallback((analysis, documentType) => {
+  const formatDocumentAnalysis = useCallback((analysis, documentName) => {
     return `## 🎉 Document Analysis Complete!
 
-**Document Type:** ${documentType.toUpperCase()}
+**Document:** ${documentName}
 
 ${analysis}
 
@@ -144,7 +144,7 @@ Would you like me to help you complete this document? I can guide you through fi
         const formData = new FormData();
         formData.append('document', file);
 
-        const response = await fetch('http://localhost:3001/api/documents/upload', {
+        const response = await fetch('http://localhost:3001/api/documents/analyze', {
           method: 'POST',
           body: formData,
         });
@@ -153,7 +153,7 @@ Would you like me to help you complete this document? I can guide you through fi
 
         if (data.success) {
           // Parse and format the analysis properly
-          const formattedAnalysis = formatDocumentAnalysis(data.analysis, data.documentType);
+          const formattedAnalysis = formatDocumentAnalysis(data.documentSummary || data.analysis, data.documentName);
           
           setMessages(prev => [...prev, {
             sender: 'bot',
@@ -168,9 +168,11 @@ Would you like me to help you complete this document? I can guide you through fi
 
           // Store document analysis data for later use
           setDocumentAnalysisData({
-            analysis: data.analysis,
-            documentType: data.documentType,
-            originalName: data.originalName
+            analysis: data.documentSummary || data.analysis,
+            documentType: data.documentName,
+            originalName: data.documentName,
+            formFields: data.formFields || [],
+            questions: data.questions || []
           });
         } else {
           setMessages(prev => [...prev, {
@@ -346,31 +348,37 @@ Would you like me to help you complete this document? I can guide you through fi
     }]);
 
     try {
-      const response = await axios.post('http://localhost:3001/api/documents/generate-questions', {
-        analysis: documentAnalysisData.analysis,
-        documentType: documentAnalysisData.documentType
-      });
+      // Questions are already generated in the analysis response
+      if (documentAnalysisData.questions && documentAnalysisData.questions.length > 0) {
+        const response = { data: { success: true, questions: documentAnalysisData.questions } };
 
-      if (response.data.success && response.data.questions) {
-        setQaSession(prev => ({
-          ...prev,
-          isActive: true,
-          questions: response.data.questions,
-          currentQuestionIndex: 0,
-          answers: {},
-          isGeneratingQuestions: false
-        }));
+        if (response.data.success && response.data.questions) {
+          setQaSession(prev => ({
+            ...prev,
+            isActive: true,
+            questions: response.data.questions,
+            currentQuestionIndex: 0,
+            answers: {},
+            isGeneratingQuestions: false
+          }));
 
-        // Ask the first question
-        const firstQuestion = response.data.questions[0];
-        setMessages(prev => [...prev, {
-          sender: 'bot',
-          text: `📋 **Question 1 of ${response.data.questions.length}:**\n\n${firstQuestion.question}\n\n${firstQuestion.required ? '*(Required)*' : '*(Optional)*'}\n${firstQuestion.example ? `*Example: ${firstQuestion.example}*` : ''}\n\nPlease provide your answer (you can type or use voice):`
-        }]);
+          // Ask the first question
+          const firstQuestion = response.data.questions[0];
+          setMessages(prev => [...prev, {
+            sender: 'bot',
+            text: `📋 **Question 1 of ${response.data.questions.length}:**\n\n${firstQuestion.question}\n\n${firstQuestion.required ? '*(Required)*' : '*(Optional)*'}\n${firstQuestion.example ? `*Example: ${firstQuestion.example}*` : ''}\n\nPlease provide your answer (you can type or use voice):`
+          }]);
+        } else {
+          setMessages(prev => [...prev, {
+            sender: 'bot',
+            text: '❌ Sorry, I couldn\'t generate questions for your document. Please try again or ask me specific questions about the document.'
+          }]);
+          setQaSession(prev => ({ ...prev, isGeneratingQuestions: false }));
+        }
       } else {
         setMessages(prev => [...prev, {
           sender: 'bot',
-          text: '❌ Sorry, I couldn\'t generate questions for your document. Please try again or ask me specific questions about the document.'
+          text: '❌ No questions were generated for this document. It may already be complete or there was an issue with the analysis.'
         }]);
         setQaSession(prev => ({ ...prev, isGeneratingQuestions: false }));
       }
@@ -410,15 +418,15 @@ Would you like me to help you complete this document? I can guide you through fi
       }]);
 
       try {
-        const response = await axios.post('http://localhost:3001/api/documents/generate-document', {
-          analysis: documentAnalysisData.analysis,
-          answers: newAnswers,
-          documentType: documentAnalysisData.documentType
+        const response = await axios.post('http://localhost:3001/api/documents/generate', {
+          documentName: documentAnalysisData.originalName,
+          filledFields: Object.entries(newAnswers).map(([key, value]) => ({ key, value })),
+          originalFields: documentAnalysisData.formFields || []
         });
 
-        if (response.data.success) {
-          // Create download link
-          const blob = new Blob([response.data.document], { type: 'text/plain' });
+        if (response.status === 200) {
+          // Create download link from response data
+          const blob = new Blob([response.data], { type: 'text/plain' });
           const url = URL.createObjectURL(blob);
           
           setMessages(prev => [...prev, {
