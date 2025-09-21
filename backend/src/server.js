@@ -9,7 +9,7 @@ import documentRoutes from './routes/documentRoutes.js';
 import qaRoutes from './routes/qaRoutes.js';
 import docChatRoutes from './routes/docChatRoutes.js';
 import workspaceRoutes from './routes/workspaceRoutes.js';
-
+import translateRoutes from './routes/translateRoutes.js';
 // Import services to initialize them
 import { configService } from './config/clients.js';
 
@@ -45,6 +45,7 @@ app.use('/api', speechRoutes);
 app.use('/api/documents', documentRoutes);
 app.use('/api/qa', qaRoutes);
 app.use('/api', docChatRoutes);
+app.use('/api', translateRoutes);
 app.use('/api/workspace', workspaceRoutes);
 
 // Error handling middleware

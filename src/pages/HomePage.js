@@ -20,6 +20,8 @@ import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import ZoomInIcon from '@mui/icons-material/ZoomIn';
 import ZoomOutIcon from '@mui/icons-material/ZoomOut';
+import Select from '@mui/material/Select';
+import MenuItem from '@mui/material/MenuItem';
 import NavigateBeforeIcon from '@mui/icons-material/NavigateBefore';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -226,6 +228,10 @@ function DocViewer({ docFile, onClose, onTextSelect }) {
   const [error, setError] = useState(null);
   const [selectedText, setSelectedText] = useState('');
   const contentRef = useRef(null);
+  const [selectionDialog, setSelectionDialog] = useState({ show: false, x: 0, y: 0, text: '' });
+  const [translateTarget, setTranslateTarget] = useState('English (US)');
+  const [translatedText, setTranslatedText] = useState('');
+  const [isTranslating, setIsTranslating] = useState(false);
 
   useEffect(() => {
     if (docFile && window.mammoth) {
@@ -320,12 +326,17 @@ function DocViewer({ docFile, onClose, onTextSelect }) {
 
   const handleTextSelection = () => {
     const selection = window.getSelection();
-    if (selection && selection.toString().trim()) {
+    if (selection && selection.toString().trim() && selection.rangeCount > 0) {
       const text = selection.toString().trim();
+      const range = selection.getRangeAt(0);
+      const rect = range.getBoundingClientRect();
+      const dialogX = rect.left + (rect.width / 2);
+      const dialogY = rect.top - 10;
       setSelectedText(text);
-      if (onTextSelect) {
-        onTextSelect(text);
-      }
+      setSelectionDialog({ show: true, x: dialogX, y: dialogY, text });
+    } else {
+      setSelectedText('');
+      setSelectionDialog({ show: false, x: 0, y: 0, text: '' });
     }
   };
 
@@ -370,21 +381,7 @@ function DocViewer({ docFile, onClose, onTextSelect }) {
         
         <Box sx={{ flex: 1 }} />
         
-        {selectedText && (
-          <Button
-            variant="contained"
-            color="primary"
-            startIcon={<AutoAwesomeIcon />}
-            onClick={() => {
-              if (onTextSelect) {
-                onTextSelect(selectedText);
-              }
-            }}
-            sx={{ ml: 1 }}
-          >
-            Ask AI about selection
-          </Button>
-        )}
+        {/* Removed inline Ask/Translate controls; using floating dialog like PDF */}
 
         <IconButton onClick={onClose} color="error">
           <DeleteIcon />
@@ -474,7 +471,7 @@ function DocViewer({ docFile, onClose, onTextSelect }) {
               boxShadow: '0 4px 20px rgba(0,0,0,0.1)'
             }}
           >
-            {/* Selection Highlight Overlay */}
+            {/* Selection Highlight Overlay - kept but reduced noise by moving translate to floating UI */}
             {selectedText && (
               <Box
                 sx={{
@@ -505,6 +502,100 @@ function DocViewer({ docFile, onClose, onTextSelect }) {
                 fontFamily: 'Arial, sans-serif'
               }}
             />
+
+            {/* Floating Ask AI + Translate Dialog for DOCX content */}
+            {selectionDialog.show && (
+              <Box
+                sx={{
+                  position: 'fixed',
+                  left: selectionDialog.x - 60,
+                  top: selectionDialog.y - 56,
+                  zIndex: 1000,
+                  boxShadow: (theme) => theme.shadows[8],
+                  backgroundColor: 'white',
+                  borderRadius: 1,
+                  p: 1,
+                  display: 'flex',
+                  gap: 1,
+                  alignItems: 'center'
+                }}
+              >
+                <Button
+                  variant="contained"
+                  color="primary"
+                  startIcon={<AutoAwesomeIcon />}
+                  onClick={() => {
+                    setSelectionDialog({ show: false, x: 0, y: 0, text: '' });
+                    window.getSelection().removeAllRanges();
+                    if (onTextSelect) {
+                      onTextSelect(selectedText);
+                    }
+                  }}
+                  sx={{
+                    fontSize: '0.75rem',
+                    px: 1.5,
+                    py: 0.5,
+                    minWidth: 'auto'
+                  }}
+                >
+                  Ask AI
+                </Button>
+                <Select
+                  value={translateTarget}
+                  onChange={async (e) => {
+                    const target = e.target.value;
+                    setTranslateTarget(target);
+                    setIsTranslating(true);
+                    setTranslatedText('');
+                    try {
+                      const resp = await fetch('http://localhost:3001/api/translate', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ text: selectionDialog.text, targetLanguage: target })
+                      });
+                      const data = await resp.json();
+                      if (resp.ok && data.translatedText) {
+                        setTranslatedText(data.translatedText);
+                      } else {
+                        setTranslatedText('Translation failed.');
+                      }
+                    } catch (err) {
+                      console.error('Translate error:', err);
+                      setTranslatedText('Translation error.');
+                    } finally {
+                      setIsTranslating(false);
+                    }
+                  }}
+                  size="small"
+                  sx={{ minWidth: 160 }}
+                >
+                  <MenuItem value={'English (US)'}>English (US)</MenuItem>
+                  <MenuItem value={'Chinese (Simplified)'}>Chinese (Simplified)</MenuItem>
+                  <MenuItem value={'Malay'}>Malay</MenuItem>
+                </Select>
+              </Box>
+            )}
+
+            {/* Translation Result Tooltip for DOCX */}
+            {translatedText && selectionDialog.show && (
+              <Paper
+                elevation={6}
+                sx={{
+                  position: 'fixed',
+                  left: selectionDialog.x - 120,
+                  top: selectionDialog.y + 8,
+                  zIndex: 1000,
+                  p: 1,
+                  maxWidth: 300,
+                  backgroundColor: 'white'
+                }}
+              >
+                <Typography variant="caption" color="text.secondary">Translation ({translateTarget}):</Typography>
+                <Typography variant="body2" sx={{ mt: 0.5 }}>
+                  {isTranslating ? 'Translating…' : translatedText}
+                </Typography>
+              </Paper>
+            )}
           </Paper>
         )}
       </Box>
@@ -523,6 +614,10 @@ function PDFViewer({ pdfFile, onClose, onTextSelect }) {
   const [isSelecting, setIsSelecting] = useState(false);
   const [debugMode, setDebugMode] = useState(false);
   const [selectionDialog, setSelectionDialog] = useState({ show: false, x: 0, y: 0, text: '' });
+  const [translateTarget, setTranslateTarget] = useState('English (US)');
+  const [showLangPicker, setShowLangPicker] = useState(false);
+  const [translatedText, setTranslatedText] = useState('');
+  const [isTranslating, setIsTranslating] = useState(false);
 
   useEffect(() => {
     if (pdfFile && window.pdfjsLib) {
@@ -694,6 +789,8 @@ function PDFViewer({ pdfFile, onClose, onTextSelect }) {
       // Clear selection when changing pages
       setSelectionDialog({ show: false, x: 0, y: 0, text: '' });
       setSelectedText('');
+      setTranslatedText('');
+      setShowLangPicker(false);
     }
   };
 
@@ -703,6 +800,8 @@ function PDFViewer({ pdfFile, onClose, onTextSelect }) {
       // Clear selection when changing pages
       setSelectionDialog({ show: false, x: 0, y: 0, text: '' });
       setSelectedText('');
+      setTranslatedText('');
+      setShowLangPicker(false);
     }
   };
 
@@ -839,38 +938,118 @@ function PDFViewer({ pdfFile, onClose, onTextSelect }) {
             className="textLayer"
           />
           
-          {/* Floating Ask AI Dialog */}
+          {/* Floating Ask AI + Translate Dialog */}
           {selectionDialog.show && (
-            <Button
-              variant="contained"
-              color="primary"
-              startIcon={<AutoAwesomeIcon />}
-              onClick={() => {
-                // Hide button immediately
-                setSelectionDialog({ show: false, x: 0, y: 0, text: '' });
-                // Clear text selection
-                setSelectedText('');
-                // Clear browser selection
-                window.getSelection().removeAllRanges();
-                // Send text to AI agent
-                if (onTextSelect) {
-                  onTextSelect(selectionDialog.text);
-                }
-              }}
+            <Box
               sx={{
                 position: 'fixed',
-                left: selectionDialog.x - 40, // Center the button
-                top: selectionDialog.y - 40, // Position above selection
+                left: selectionDialog.x - 60,
+                top: selectionDialog.y - 56,
                 zIndex: 1000,
                 boxShadow: (theme) => theme.shadows[8],
-                fontSize: '0.75rem',
-                px: 1.5,
-                py: 0.5,
-                minWidth: 'auto'
+                backgroundColor: 'white',
+                borderRadius: 1,
+                p: 1,
+                display: 'flex',
+                gap: 1,
+                alignItems: 'center'
+              }}
+           >
+              <Button
+                variant="contained"
+                color="primary"
+                startIcon={<AutoAwesomeIcon />}
+                onClick={() => {
+                  // Hide dialog immediately
+                  setSelectionDialog({ show: false, x: 0, y: 0, text: '' });
+                  // Clear text selection
+                  setSelectedText('');
+                  // Clear browser selection
+                  window.getSelection().removeAllRanges();
+                  // Send text to AI agent
+                  if (onTextSelect) {
+                    onTextSelect(selectionDialog.text);
+                  }
+                }}
+                sx={{
+                  fontSize: '0.75rem',
+                  px: 1.5,
+                  py: 0.5,
+                  minWidth: 'auto'
+                }}
+              >
+                Ask AI
+              </Button>
+              <Button
+                variant="outlined"
+                color="primary"
+                onClick={() => setShowLangPicker(prev => !prev)}
+                sx={{
+                  fontSize: '0.75rem',
+                  px: 1.5,
+                  py: 0.5,
+                  minWidth: 'auto'
+                }}
+              >
+                Translate
+              </Button>
+              {showLangPicker && (
+                <Select
+                  value={translateTarget}
+                  onChange={async (e) => {
+                    const target = e.target.value;
+                    setTranslateTarget(target);
+                    setIsTranslating(true);
+                    setTranslatedText('');
+                    try {
+                      const resp = await fetch('http://localhost:3001/api/translate', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ text: selectionDialog.text, targetLanguage: target })
+                      });
+                      const data = await resp.json();
+                      if (resp.ok && data.translatedText) {
+                        setTranslatedText(data.translatedText);
+                      } else {
+                        setTranslatedText('Translation failed.');
+                      }
+                    } catch (err) {
+                      console.error('Translate error:', err);
+                      setTranslatedText('Translation error.');
+                    } finally {
+                      setIsTranslating(false);
+                    }
+                  }}
+                  size="small"
+                  sx={{ minWidth: 160 }}
+                >
+                  <MenuItem value={'English (US)'}>English (US)</MenuItem>
+                  <MenuItem value={'Chinese (Simplified)'}>Chinese (Simplified)</MenuItem>
+                  <MenuItem value={'Malay'}>Malay</MenuItem>
+                </Select>
+              )}
+            </Box>
+          )}
+
+          {/* Translation Result Tooltip */}
+          {translatedText && (
+            <Paper
+              elevation={6}
+              sx={{
+                position: 'fixed',
+                left: selectionDialog.x - 120,
+                top: selectionDialog.y + 8,
+                zIndex: 1000,
+                p: 1,
+                maxWidth: 300,
+                backgroundColor: 'white'
               }}
             >
-              Ask AI
-            </Button>
+              <Typography variant="caption" color="text.secondary">Translation ({translateTarget}):</Typography>
+              <Typography variant="body2" sx={{ mt: 0.5 }}>
+                {isTranslating ? 'Translating…' : translatedText}
+              </Typography>
+            </Paper>
           )}
         </Box>
       </Box>
