@@ -8,6 +8,14 @@ const LANGUAGES = [
   { code: 'ms-MY', name: 'Malay' },
 ];
 
+// Document-specific suggestion messages for legal analysis
+const DOC_SUGGESTION_MESSAGES = [
+  "Summarize the document",
+  "Risk Detector - Flag unfair or unusual terms with color-coded risk levels",
+  "What are my key obligations in this document?",
+  "What are the termination clauses?",
+];
+
 export function useDocChatViewModel() {
   const [messages, setMessages] = useState([
     {
@@ -22,6 +30,7 @@ export function useDocChatViewModel() {
   const [selectedLanguage, setSelectedLanguage] = useState('en-US');
   const [sessionId, setSessionId] = useState(null);
   const [documentName, setDocumentName] = useState(null);
+  const [showSuggestions, setShowSuggestions] = useState(true);
 
   const mediaRecorder = useRef(null);
   const audioChunks = useRef([]);
@@ -114,8 +123,21 @@ export function useDocChatViewModel() {
     }]);
     
     try {
+      // Enhanced prompt for risk detection
+      let enhancedQuestion = question;
+      if (question.includes('Risk Detector')) {
+        enhancedQuestion = `${question}
+
+Please analyze this document for potential risks and unfair terms. For each identified issue, categorize it with risk levels:
+🟢 Standard (safe) - Normal, fair terms
+🟡 Needs attention - Terms that require careful consideration (e.g., auto-renewal clauses, broad termination rights)
+🔴 High-risk - Potentially unfair or dangerous terms (e.g., hidden fees, excessive personal liability, one-sided indemnification)
+
+Format your response with clear risk level indicators and explanations for each flagged item.`;
+      }
+      
       const response = await axios.post(`http://localhost:3001/api/doc-chat/${sessionId}/ask`, {
-        question,
+        question: enhancedQuestion,
         provider: 'openai'
       });
       if (response.data && response.data.success) {
@@ -151,10 +173,19 @@ export function useDocChatViewModel() {
     if (!input.trim() || isLoading) return;
     const userMessage = { sender: 'user', text: input };
     setMessages(prev => [...prev, userMessage]);
+    setShowSuggestions(false);
     const currentInput = input;
     setInput('');
     await askQuestion(currentInput);
   };
+
+  const handleSuggestionClick = useCallback(async (suggestionText) => {
+    const userMessage = { sender: 'user', text: suggestionText };
+    setMessages(prev => [...prev, userMessage]);
+    setShowSuggestions(false);
+    
+    await askQuestion(suggestionText);
+  }, [askQuestion]);
 
   const handleInputChange = (e) => setInput(e.target.value);
   const handleInputKeyDown = (e) => { if (e.key === 'Enter') handleSend(); };
@@ -262,16 +293,25 @@ export function useDocChatViewModel() {
     isLoading,
     selectedLanguage,
     setSelectedLanguage,
+    showSuggestions,
+    
+    // Constants
     LANGUAGES,
+    SUGGESTION_MESSAGES: DOC_SUGGESTION_MESSAGES,
+    
+    // Actions
     handleSend,
     handleInputChange,
     handleInputKeyDown,
+    handleSuggestionClick,
     startRecording,
     stopRecording,
     handleFileUpload,
     prefillInput,
     startSessionWithFile,
     startSessionWithText,
+    
+    // Session info
     sessionId,
     documentName
   };

@@ -73,7 +73,7 @@ function ChatBot({
         {showSuggestions && SUGGESTION_MESSAGES && (
           <div className="chatbot-suggestions">
             <div className="suggestions-header">
-              Try asking me about these legal documents:
+              Quick Questions to Ask:
             </div>
             <div className="suggestions-grid">
               {SUGGESTION_MESSAGES.map((suggestion, idx) => (
