@@ -9,10 +9,10 @@ import theme from './theme';
 import DashboardLayout from './components/DashboardLayout';
 import HomePage from './pages/HomePage';
 import ChatbotPage from './pages/ChatbotPage';
-import AIWorkspacePage from './pages/AIWorkspacePage';
 import TemplatesPage from './pages/TemplatesPage';
 import ComparePage from './pages/ComparePage';
 import SettingsPage from './pages/SettingsPage';
+import AIWorkspacePage from './pages/AIWorkspacePage';
 import '@fontsource/roboto/300.css';
 import '@fontsource/roboto/400.css';
 import '@fontsource/roboto/500.css';
@@ -48,7 +48,7 @@ function App() {
               />
             </ChatbotPage>
           } />
-          <Route path="ai-workspace" element={<AIWorkspacePage />} />
+          <Route path="workspace" element={<AIWorkspacePage />} />
           <Route path="templates" element={<TemplatesPage />} />
           <Route path="compare" element={<ComparePage />} />
           <Route path="settings" element={<SettingsPage />} />

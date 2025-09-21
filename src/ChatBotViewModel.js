@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
 import axios from 'axios';
+import { useWorkspaceViewModel } from './WorkspaceViewModel';
 
 // Function to convert blob to base64
 const blobToBase64 = (blob) => {
@@ -31,14 +32,21 @@ const SUGGESTION_MESSAGES = [
   "I need a business partnership agreement",
   "Can you create a service agreement template?",
   "I want to draft a loan agreement",
-  "Please help me with a copyright assignment form"
+  "Please help me with a copyright assignment form",
+  "Create a todo for reviewing my contract",
+  "Help me send an email about document completion",
+  "What tasks should I prioritize today?"
 ];
 
 export function useChatBotViewModel() {
+  // Add workspace integration
+  const workspaceViewModel = useWorkspaceViewModel();
+  const { todos, files, createTodo, sendEmail, fetchTodos } = workspaceViewModel;
+
   const [messages, setMessages] = useState([
     {
       sender: 'bot',
-        text: 'Hello! I\'m AYE AI Legal Assistant. This is your place to request legal document templates and get answers to legal questions. You can also use voice messages for convenience. What legal document or assistance do you need today?'
+        text: 'Hello! I\'m AYE AI Legal Assistant. I can help you with legal document templates, answer legal questions, manage your workspace todos, and send emails. You can also use voice messages for convenience. What can I help you with today?'
     }
   ]);
   const [input, setInput] = useState('');
@@ -53,36 +61,89 @@ export function useChatBotViewModel() {
   const mediaRecorder = useRef(null);
   const audioChunks = useRef([]);
 
-  // Process text message through chat API
+  // Process text message through chat API with workspace context
   const processTextMessage = async (messageText) => {
     setIsLoading(true);
     try {
-      // Regular chat
+      // Build conversation history
       const conversationHistory = messages.map(msg => ({
         sender: msg.sender,
         text: msg.text
       }));
 
+      // Include workspace context
       const response = await axios.post('http://localhost:3001/api/chat', {
         message: messageText,
-        conversationHistory: conversationHistory
+        conversationHistory: conversationHistory,
+        context: {
+          type: 'workspace',
+          todos: todos || [],
+          files: files || [],
+          userPreferences: {
+            language: selectedLanguage,
+            workspaceMode: true
+          }
+        }
       });
 
       if (response.data.response) {
+        const botResponse = response.data.response;
+        
         setMessages(prev => [...prev, {
           sender: 'bot',
-          text: response.data.response,
-          timestamp: response.data.timestamp
+          text: botResponse,
+          timestamp: response.data.timestamp,
+          workspaceActions: response.data.workspaceActions || []
         }]);
+
+        // Handle workspace actions suggested by the AI
+        await handleWorkspaceActions(botResponse, messageText, response);
       }
     } catch (error) {
       console.error('Chat API error:', error);
       setMessages(prev => [...prev, {
         sender: 'bot',
-        text: 'I apologize, but I\'m having trouble processing your request right now. Please try again in a moment.'
+        text: 'I apologize, but I\'m having trouble processing your request right now. Please try again in a moment, or check if your backend services are running.'
       }]);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Handle workspace actions based on AI response (simplified - backend handles todo creation)
+  const handleWorkspaceActions = async (botResponse, userMessage, response) => {
+    const lowerResponse = botResponse.toLowerCase();
+    const lowerUserMessage = userMessage.toLowerCase();
+
+    // Backend now handles todo creation automatically, so we just handle UI-specific actions
+    
+    // Handle backend-processed workspace actions
+    if (response?.data?.createdTodos && response.data.createdTodos.length > 0) {
+      // Refresh todos if available
+      if (fetchTodos) {
+        await fetchTodos();
+      }
+    }
+
+    // Add any additional messages from backend processing
+    if (response?.data?.additionalMessages && response.data.additionalMessages.length > 0) {
+      response.data.additionalMessages.forEach(msg => {
+        setMessages(prev => [...prev, {
+          sender: 'bot',
+          text: msg,
+          timestamp: new Date().toISOString()
+        }]);
+      });
+    }
+
+    // Handle email suggestions (UI-specific)
+    if ((lowerResponse.includes('send email') || lowerResponse.includes('email to') || 
+         lowerUserMessage.includes('email') || lowerUserMessage.includes('send')) && sendEmail) {
+      
+      setMessages(prev => [...prev, {
+        sender: 'bot',
+        text: `📧 I can help you send an email! Please go to the Workspace page to use the email feature, or provide me with the recipient email, subject, and message details.`
+      }]);
     }
   };
 

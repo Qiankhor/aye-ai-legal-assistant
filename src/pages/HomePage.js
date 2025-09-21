@@ -24,18 +24,47 @@ import NavigateBeforeIcon from '@mui/icons-material/NavigateBefore';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import DeleteIcon from '@mui/icons-material/Delete';
 import DescriptionIcon from '@mui/icons-material/Description';
+import WorkIcon from '@mui/icons-material/Work';
+import ToggleButton from '@mui/material/ToggleButton';
+import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
+import Card from '@mui/material/Card';
+import CardContent from '@mui/material/CardContent';
+import List from '@mui/material/List';
+import ListItem from '@mui/material/ListItem';
+import ListItemText from '@mui/material/ListItemText';
+import ListItemIcon from '@mui/material/ListItemIcon';
+import ListItemSecondaryAction from '@mui/material/ListItemSecondaryAction';
+import Divider from '@mui/material/Divider';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked';
+import AddIcon from '@mui/icons-material/Add';
+import DownloadIcon from '@mui/icons-material/Download';
+import Dialog from '@mui/material/Dialog';
+import DialogTitle from '@mui/material/DialogTitle';
+import DialogContent from '@mui/material/DialogContent';
+import DialogActions from '@mui/material/DialogActions';
+import Snackbar from '@mui/material/Snackbar';
+import Alert from '@mui/material/Alert';
+import CircularProgress from '@mui/material/CircularProgress';
+import Tooltip from '@mui/material/Tooltip';
 import ChatBot from '../ChatBot';
 import { useDocChatViewModel } from '../DocChatViewModel';
+import { useWorkspaceViewModel } from '../WorkspaceViewModel';
+import { useWorkspaceAIViewModel } from '../WorkspaceAIViewModel';
 
 
-function AIAgentSidebar({ open, onClose, selectedText, onTextProcessed, onWidthChange, viewModel }) {
+function AIAgentSidebar({ open, onClose, selectedText, onTextProcessed, onWidthChange, viewModel, mode = 'document', workspaceContext = null }) {
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     const savedWidth = localStorage.getItem('aiAgentSidebarWidth');
     return savedWidth ? parseInt(savedWidth) : 400;
   });
   const [isResizing, setIsResizing] = useState(false);
 
-  // No auto-send; sending happens when user clicks the floating "Ask AI" button
+  // Initialize workspace AI view model if in workspace mode
+  const workspaceAIViewModel = useWorkspaceAIViewModel(workspaceContext);
+  
+  // Use appropriate view model based on mode
+  const activeViewModel = mode === 'workspace' ? workspaceAIViewModel : viewModel;
 
   // Notify parent of width changes when sidebar opens
   useEffect(() => {
@@ -150,9 +179,11 @@ function AIAgentSidebar({ open, onClose, selectedText, onTextProcessed, onWidthC
                 <AutoAwesomeIcon />
               </Avatar>
               <Box>
-                <Typography variant="h6" sx={{ fontWeight: 600 }}>AYE</Typography>
+                <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                  {mode === 'workspace' ? 'AYE Workspace Helper' : 'AYE Legal Document Helper'}
+                </Typography>
                 <Typography variant="caption" color="text.secondary">
-                  Powered by your AI Legal Assistant
+                  {mode === 'workspace' ? 'Your intelligent workspace assistant' : 'Your Legal Assistant'}
                 </Typography>
               </Box>
             </Box>
@@ -165,19 +196,22 @@ function AIAgentSidebar({ open, onClose, selectedText, onTextProcessed, onWidthC
         {/* ChatBot Content */}
         <Box sx={{ flex: 1, minHeight: 0, p: 0 }}>
           <ChatBot
-            messages={viewModel.messages}
-            input={viewModel.input}
-            isRecording={viewModel.isRecording}
-            isLoading={viewModel.isLoading}
-            handleSend={viewModel.handleSend}
-            handleInputChange={viewModel.handleInputChange}
-            handleInputKeyDown={viewModel.handleInputKeyDown}
-            startRecording={viewModel.startRecording}
-            stopRecording={viewModel.stopRecording}
-            handleFileUpload={viewModel.handleFileUpload}
-            selectedLanguage={viewModel.selectedLanguage}
-            setSelectedLanguage={viewModel.setSelectedLanguage}
-            LANGUAGES={viewModel.LANGUAGES}
+            messages={activeViewModel.messages}
+            input={activeViewModel.input}
+            isRecording={activeViewModel.isRecording}
+            isLoading={activeViewModel.isLoading}
+            handleSend={activeViewModel.handleSend}
+            handleInputChange={activeViewModel.handleInputChange}
+            handleInputKeyDown={activeViewModel.handleInputKeyDown}
+            startRecording={activeViewModel.startRecording}
+            stopRecording={activeViewModel.stopRecording}
+            handleFileUpload={activeViewModel.handleFileUpload}
+            selectedLanguage={activeViewModel.selectedLanguage}
+            setSelectedLanguage={activeViewModel.setSelectedLanguage}
+            LANGUAGES={activeViewModel.LANGUAGES}
+            showSuggestions={activeViewModel.showSuggestions}
+            SUGGESTION_MESSAGES={activeViewModel.SUGGESTION_MESSAGES}
+            handleSuggestionClick={activeViewModel.handleSuggestionClick}
           />
         </Box>
         </Box>
@@ -844,6 +878,388 @@ function PDFViewer({ pdfFile, onClose, onTextSelect }) {
   );
 }
 
+// Workspace View Component
+function WorkspaceView({ workspaceViewModel, onFileUpload, onFileOpen }) {
+  const {
+    todos,
+    files,
+    isLoadingTodos,
+    isLoadingFiles,
+    error,
+    successMessage,
+    createTodo,
+    toggleTodo,
+    deleteTodo,
+    uploadFile,
+    deleteFile,
+    generateAITasks,
+    analyzeFile,
+    getFileContent,
+    clearError,
+    clearSuccessMessage
+  } = workspaceViewModel;
+
+  // UI state
+  const [addTodoDialog, setAddTodoDialog] = useState(false);
+  const [newTodoText, setNewTodoText] = useState('');
+  const [newTodoDueDate, setNewTodoDueDate] = useState('');
+  const fileInputRef = useRef(null);
+
+  // Handle todo creation
+  const handleCreateTodo = async () => {
+    if (!newTodoText.trim()) return;
+
+    const result = await createTodo(newTodoText, newTodoDueDate || null);
+    if (result.success) {
+      setAddTodoDialog(false);
+      setNewTodoText('');
+      setNewTodoDueDate('');
+    }
+  };
+
+  // Handle file upload
+  const handleFileUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    try {
+      const result = await uploadFile(file);
+      if (result.success && onFileUpload) {
+        onFileUpload(result.file);
+      }
+    } catch (error) {
+      console.error('File upload error:', error);
+    }
+    
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  // Handle drag and drop for file upload
+  const handleDrop = async (event) => {
+    event.preventDefault();
+    const files = Array.from(event.dataTransfer.files);
+    if (files.length > 0) {
+      const result = await uploadFile(files[0]);
+      if (result.success && onFileUpload) {
+        onFileUpload(result.file);
+      }
+    }
+  };
+
+  const handleDragOver = (event) => {
+    event.preventDefault();
+  };
+
+  // Handle file opening
+  const handleFileOpen = async (file) => {
+    if (!onFileOpen) return;
+
+    try {
+      // Get file content from backend
+      const result = await getFileContent(file.id);
+      if (result.success && result.file.content) {
+        // Convert base64 content back to File object
+        const base64Data = result.file.content;
+        
+        // Extract the base64 part (remove data:mime/type;base64, prefix)
+        const base64Content = base64Data.includes(',') 
+          ? base64Data.split(',')[1] 
+          : base64Data;
+        
+        // Convert base64 to binary
+        const binaryString = atob(base64Content);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        
+        // Determine MIME type
+        let mimeType = 'application/octet-stream';
+        if (file.type === 'pdf') {
+          mimeType = 'application/pdf';
+        } else if (file.type === 'docx') {
+          mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+        } else if (file.type === 'doc') {
+          mimeType = 'application/msword';
+        } else if (file.type === 'txt') {
+          mimeType = 'text/plain';
+        }
+        
+        // Create File object
+        const fileBlob = new Blob([bytes], { type: mimeType });
+        const fileObject = new File([fileBlob], file.name, { type: mimeType });
+        
+        // Call the onFileOpen callback
+        onFileOpen(fileObject);
+      } else {
+        console.error('Failed to get file content:', result.error);
+      }
+    } catch (error) {
+      console.error('Error opening file:', error);
+    }
+  };
+
+  const getFileIcon = (type) => {
+    switch (type) {
+      case 'pdf': return <DescriptionIcon color="error" />;
+      case 'docx': return <DescriptionIcon color="primary" />;
+      case 'txt': return <DescriptionIcon color="action" />;
+      default: return <DescriptionIcon />;
+    }
+  };
+
+  return (
+    <Box sx={{ 
+      height: '100%', 
+      minHeight: '100vh',
+      p: 3,
+      overflow: 'auto'
+    }}>
+      <Typography variant="h5" sx={{ mb: 3, fontWeight: 700 }}>
+        My Workspace
+      </Typography>
+
+      {/* Loading Backdrop */}
+      <Backdrop open={isLoadingTodos || isLoadingFiles} sx={{ zIndex: 1000 }}>
+        <CircularProgress color="primary" />
+      </Backdrop>
+
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+        {/* To-Do List Section */}
+        <Card>
+          <CardContent>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+              <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                To-Do List
+                {isLoadingTodos && <CircularProgress size={16} sx={{ ml: 1 }} />}
+              </Typography>
+              <Button 
+                variant="outlined" 
+                size="small" 
+                startIcon={<AddIcon />}
+                onClick={() => setAddTodoDialog(true)}
+                disabled={isLoadingTodos}
+              >
+                Add Task
+              </Button>
+            </Box>
+            
+            <List>
+              {todos.map((todo, index) => (
+                <React.Fragment key={todo.id}>
+                  <ListItem sx={{ px: 0 }}>
+                    <ListItemIcon>
+                      <IconButton onClick={() => toggleTodo(todo.id)} size="small">
+                        {todo.completed ? 
+                          <CheckCircleIcon color="success" /> : 
+                          <RadioButtonUncheckedIcon />
+                        }
+                      </IconButton>
+                    </ListItemIcon>
+                    <ListItemText
+                      primary={
+                        <Typography 
+                          sx={{ 
+                            textDecoration: todo.completed ? 'line-through' : 'none',
+                            color: todo.completed ? 'text.secondary' : 'text.primary',
+                            fontSize: '0.95rem'
+                          }}
+                        >
+                          {todo.task}
+                        </Typography>
+                      }
+                      secondary={
+                        <Typography variant="caption" color="text.secondary">
+                          Due: {todo.dueDate} • Status: {todo.status || 'pending'}
+                        </Typography>
+                      }
+                    />
+                    <ListItemSecondaryAction>
+                      <IconButton onClick={() => deleteTodo(todo.id)} size="small">
+                        <DeleteIcon fontSize="small" />
+                      </IconButton>
+                    </ListItemSecondaryAction>
+                  </ListItem>
+                  {index < todos.length - 1 && <Divider />}
+                </React.Fragment>
+              ))}
+            </List>
+            
+            {todos.length === 0 && !isLoadingTodos && (
+              <Box sx={{ textAlign: 'center', py: 4 }}>
+                <Typography variant="body2" color="text.secondary">
+                  No tasks yet. Add your first task or ask AI to help organize your work!
+                </Typography>
+              </Box>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* File Storage Section */}
+        <Card
+          onDrop={handleDrop}
+          onDragOver={handleDragOver}
+          sx={{
+            '&:hover': {
+              backgroundColor: 'action.hover'
+            }
+          }}
+        >
+          <CardContent>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+              <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                My Files
+                {isLoadingFiles && <CircularProgress size={16} sx={{ ml: 1 }} />}
+              </Typography>
+              <Button 
+                variant="outlined" 
+                size="small" 
+                startIcon={<CloudUploadIcon />}
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isLoadingFiles}
+              >
+                Upload File
+              </Button>
+            </Box>
+            
+            <List>
+              {files.map((file, index) => (
+                <React.Fragment key={file.id}>
+                  <ListItem sx={{ px: 0 }}>
+                    <ListItemIcon>
+                      {getFileIcon(file.type)}
+                    </ListItemIcon>
+                    <ListItemText
+                      primary={
+                        <Typography 
+                          sx={{ 
+                            fontSize: '0.95rem',
+                            cursor: 'pointer',
+                            color: 'primary.main',
+                            textDecoration: 'underline',
+                            '&:hover': {
+                              color: 'primary.dark'
+                            }
+                          }}
+                          onClick={() => handleFileOpen(file)}
+                          title="Click to open file in document viewer"
+                        >
+                          {file.name}
+                        </Typography>
+                      }
+                      secondary={
+                        <Typography variant="caption" color="text.secondary">
+                          {file.size} • {file.date} • {file.documentType || 'document'}
+                        </Typography>
+                      }
+                    />
+                    <ListItemSecondaryAction>
+                      <IconButton 
+                        size="small" 
+                        sx={{ mr: 1 }}
+                        onClick={() => analyzeFile(file.id)}
+                        title="Analyze with AI"
+                      >
+                        <AutoAwesomeIcon fontSize="small" />
+                      </IconButton>
+                      <IconButton size="small" sx={{ mr: 1 }}>
+                        <DownloadIcon fontSize="small" />
+                      </IconButton>
+                      <IconButton onClick={() => deleteFile(file.id)} size="small">
+                        <DeleteIcon fontSize="small" />
+                      </IconButton>
+                    </ListItemSecondaryAction>
+                  </ListItem>
+                  {index < files.length - 1 && <Divider />}
+                </React.Fragment>
+              ))}
+            </List>
+            
+            {files.length === 0 && !isLoadingFiles && (
+              <Box sx={{ textAlign: 'center', py: 4 }}>
+                <Typography variant="body2" color="text.secondary">
+                  No files stored yet. Upload your first file or drag & drop here!
+                </Typography>
+              </Box>
+            )}
+          </CardContent>
+        </Card>
+      </Box>
+
+      {/* Hidden file input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".pdf,.docx,.doc,.txt"
+        onChange={handleFileUpload}
+        style={{ display: 'none' }}
+      />
+
+      {/* Add Todo Dialog */}
+      <Dialog open={addTodoDialog} onClose={() => setAddTodoDialog(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Add New Task</DialogTitle>
+        <DialogContent>
+          <TextField
+            autoFocus
+            margin="dense"
+            label="Task Description"
+            fullWidth
+            variant="outlined"
+            value={newTodoText}
+            onChange={(e) => setNewTodoText(e.target.value)}
+            sx={{ mb: 2 }}
+          />
+          <TextField
+            margin="dense"
+            label="Due Date"
+            type="date"
+            fullWidth
+            variant="outlined"
+            value={newTodoDueDate}
+            onChange={(e) => setNewTodoDueDate(e.target.value)}
+            InputLabelProps={{
+              shrink: true,
+            }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setAddTodoDialog(false)}>Cancel</Button>
+          <Button onClick={handleCreateTodo} variant="contained" disabled={!newTodoText.trim()}>
+            Add Task
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Error Snackbar */}
+      <Snackbar 
+        open={!!error} 
+        autoHideDuration={6000} 
+        onClose={clearError}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+      >
+        <Alert onClose={clearError} severity="error" sx={{ width: '100%' }}>
+          {error}
+        </Alert>
+      </Snackbar>
+
+      {/* Success Snackbar */}
+      <Snackbar 
+        open={!!successMessage} 
+        autoHideDuration={4000} 
+        onClose={clearSuccessMessage}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+      >
+        <Alert onClose={clearSuccessMessage} severity="success" sx={{ width: '100%' }}>
+          {successMessage}
+        </Alert>
+      </Snackbar>
+    </Box>
+  );
+}
+
 export default function HomePage({ chatViewModel }) {
   const [aiAgentOpen, setAiAgentOpen] = useState(false);
   const [uploadedFile, setUploadedFile] = useState(null);
@@ -851,10 +1267,15 @@ export default function HomePage({ chatViewModel }) {
   const [isDragOver, setIsDragOver] = useState(false);
   const [selectedText, setSelectedText] = useState('');
   const [sidebarWidth, setSidebarWidth] = useState(400);
+  const [viewMode, setViewMode] = useState('documents'); // 'documents' or 'workspace'
   const fileInputRef = useRef(null);
-  // Use document-grounded chatbot view model for Home/Overview
+  
+  // Use document-grounded chatbot view model for document mode
   const internalViewModel = useDocChatViewModel();
-  const viewModel = chatViewModel ?? internalViewModel;
+  const docViewModel = chatViewModel ?? internalViewModel;
+  
+  // Use workspace view model for workspace mode
+  const workspaceViewModel = useWorkspaceViewModel();
 
   // Load PDF.js library and CSS
   useEffect(() => {
@@ -968,7 +1389,7 @@ export default function HomePage({ chatViewModel }) {
     return null;
   };
 
-  const handleDrop = (e) => {
+  const handleDrop = async (e) => {
     e.preventDefault();
     setIsDragOver(false);
     
@@ -979,8 +1400,22 @@ export default function HomePage({ chatViewModel }) {
       const file = validFiles[0];
       setUploadedFile(file);
       setFileType(getFileType(file));
-      if (viewModel && viewModel.startSessionWithFile) {
-        viewModel.startSessionWithFile(file);
+      
+      // Start document session
+      if (docViewModel && docViewModel.startSessionWithFile) {
+        docViewModel.startSessionWithFile(file);
+      }
+      
+      // Also save to workspace
+      try {
+        const result = await workspaceViewModel.uploadFile(file);
+        if (result.success) {
+          console.log('File saved to workspace successfully');
+          // The success message will be shown via the workspace view model's success state
+        }
+      } catch (error) {
+        console.error('Failed to save file to workspace:', error);
+        // Don't show error to user as the main functionality (document viewing) still works
       }
     } else {
       // Check if it's a DOC file specifically
@@ -999,13 +1434,27 @@ export default function HomePage({ chatViewModel }) {
     }
   };
 
-  const handleFileSelect = (e) => {
+  const handleFileSelect = async (e) => {
     const file = e.target.files[0];
     if (file && isValidFileType(file)) {
       setUploadedFile(file);
       setFileType(getFileType(file));
-      if (viewModel && viewModel.startSessionWithFile) {
-        viewModel.startSessionWithFile(file);
+      
+      // Start document session
+      if (docViewModel && docViewModel.startSessionWithFile) {
+        docViewModel.startSessionWithFile(file);
+      }
+      
+      // Also save to workspace
+      try {
+        const result = await workspaceViewModel.uploadFile(file);
+        if (result.success) {
+          console.log('File saved to workspace successfully');
+          // The success message will be shown via the workspace view model's success state
+        }
+      } catch (error) {
+        console.error('Failed to save file to workspace:', error);
+        // Don't show error to user as the main functionality (document viewing) still works
       }
     } else if (file) {
       // Provide specific error messages
@@ -1031,8 +1480,49 @@ export default function HomePage({ chatViewModel }) {
   const handleTextSelect = (text) => {
     setSelectedText(text);
     setAiAgentOpen(true);
-    if (text && viewModel && viewModel.prefillInput) {
-      viewModel.prefillInput(`"${text}"`);
+    if (text && docViewModel && docViewModel.prefillInput) {
+      docViewModel.prefillInput(`"${text}"`);
+    }
+  };
+
+  // Handle mode change
+  const handleModeChange = (event, newMode) => {
+    if (newMode !== null) {
+      setViewMode(newMode);
+      // Close any open documents when switching to workspace
+      if (newMode === 'workspace') {
+        setUploadedFile(null);
+        setFileType(null);
+        setSelectedText('');
+      }
+      // Close AI agent to reset context
+      setAiAgentOpen(false);
+    }
+  };
+
+  // Handle file opening from workspace
+  const handleFileOpenFromWorkspace = (fileObject) => {
+    // Switch to document mode
+    setViewMode('documents');
+    // Set the file to be displayed
+    setUploadedFile(fileObject);
+    setFileType(getFileType(fileObject));
+    // Start session with the file if docViewModel supports it
+    if (docViewModel && docViewModel.startSessionWithFile) {
+      docViewModel.startSessionWithFile(fileObject);
+    }
+  };
+
+  // Prepare workspace context for AI
+  const workspaceContext = {
+    todos: workspaceViewModel.todos,
+    files: workspaceViewModel.files,
+    createTodo: workspaceViewModel.createTodo,
+    uploadFile: workspaceViewModel.uploadFile,
+    generateAITasks: workspaceViewModel.generateAITasks,
+    analyzeFile: workspaceViewModel.analyzeFile,
+    triggerFileUpload: () => {
+      // This will be handled by the WorkspaceView component
     }
   };
 
@@ -1042,16 +1532,72 @@ export default function HomePage({ chatViewModel }) {
       height: '100%', 
       minHeight: '100vh',
       display: 'flex',
+      flexDirection: 'column',
       transition: 'margin-right 0.3s ease',
       marginRight: aiAgentOpen ? `${sidebarWidth}px` : 0
     }}>
+      {/* Mode Toggle Header */}
+      <Box sx={{ 
+        p: 2, 
+        borderBottom: 1, 
+        borderColor: 'divider',
+        backgroundColor: 'background.paper',
+        zIndex: 10
+      }}>
+        <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+          <ToggleButtonGroup
+            value={viewMode}
+            exclusive
+            onChange={handleModeChange}
+            aria-label="view mode"
+            sx={{
+              '& .MuiToggleButton-root': {
+                px: 3,
+                py: 1,
+                border: 1,
+                borderColor: 'divider',
+                '&.Mui-selected': {
+                  backgroundColor: 'primary.main',
+                  color: 'primary.contrastText',
+                  '&:hover': {
+                    backgroundColor: 'primary.dark',
+                  }
+                }
+              }
+            }}
+          >
+            <ToggleButton value="documents" aria-label="documents">
+              <DescriptionIcon sx={{ mr: 1 }} />
+              Documents
+            </ToggleButton>
+            <ToggleButton value="workspace" aria-label="workspace">
+              <WorkIcon sx={{ mr: 1 }} />
+              Workspace
+            </ToggleButton>
+          </ToggleButtonGroup>
+        </Box>
+      </Box>
+
+      {/* Main Content Area */}
       <Box sx={{ 
         flex: 1, 
         height: '100%', 
-        minHeight: '100vh',
+        minHeight: 0,
         overflow: 'hidden'
       }}>
-        {uploadedFile ? (
+        {viewMode === 'workspace' ? (
+          /* Workspace View */
+          <WorkspaceView 
+            workspaceViewModel={workspaceViewModel}
+            onFileUpload={(file) => {
+              // Optional: Switch to document view when file is uploaded from workspace
+              // setViewMode('documents');
+              // setUploadedFile(file);
+              // setFileType(getFileType(file));
+            }}
+            onFileOpen={handleFileOpenFromWorkspace}
+          />
+        ) : uploadedFile ? (
           /* Document Viewer */
           fileType === 'pdf' ? (
             <PDFViewer 
@@ -1116,6 +1662,10 @@ export default function HomePage({ chatViewModel }) {
             Supports: PDF, DOCX files (up to 50MB)
           </Typography>
 
+          <Typography variant="body2" color="primary.main" sx={{ textAlign: 'center', mt: 1, fontWeight: 500 }}>
+            📁 Files will be automatically saved to your workspace
+          </Typography>
+
           <Button 
             variant="outlined" 
             startIcon={<DescriptionIcon />}
@@ -1164,8 +1714,33 @@ export default function HomePage({ chatViewModel }) {
         selectedText={selectedText}
         onTextProcessed={() => setSelectedText('')}
         onWidthChange={setSidebarWidth}
-        viewModel={viewModel}
+        viewModel={docViewModel}
+        mode={viewMode}
+        workspaceContext={viewMode === 'workspace' ? workspaceContext : null}
       />
+
+      {/* Workspace Success/Error Snackbars - Show in all modes */}
+      <Snackbar 
+        open={!!workspaceViewModel.error} 
+        autoHideDuration={6000} 
+        onClose={workspaceViewModel.clearError}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert onClose={workspaceViewModel.clearError} severity="error" sx={{ width: '100%' }}>
+          {workspaceViewModel.error}
+        </Alert>
+      </Snackbar>
+
+      <Snackbar 
+        open={!!workspaceViewModel.successMessage} 
+        autoHideDuration={4000} 
+        onClose={workspaceViewModel.clearSuccessMessage}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert onClose={workspaceViewModel.clearSuccessMessage} severity="success" sx={{ width: '100%' }}>
+          {workspaceViewModel.successMessage}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }
