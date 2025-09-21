@@ -352,7 +352,7 @@ export function useWorkspaceViewModel() {
 
   const getFileContent = useCallback(async (fileId) => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/workspace/files/${fileId}`);
+      const response = await axios.get(`${API_BASE_URL}/workspace/files/${fileId}?includeContent=true`);
       
       if (response.data.success) {
         return { success: true, file: response.data.file };

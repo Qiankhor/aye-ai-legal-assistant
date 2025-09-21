@@ -446,12 +446,13 @@ router.post('/files', async (req, res) => {
   }
 });
 
-// Get specific file metadata
+// Get specific file metadata and content
 router.get('/files/:id', async (req, res) => {
   try {
     const { id } = req.params;
+    const { includeContent } = req.query; // Optional query parameter to include content
 
-    console.log(`📄 Fetching file metadata for ID: ${id}`);
+    console.log(`📄 Fetching file ${includeContent ? 'with content' : 'metadata'} for ID: ${id}`);
 
     const { db } = await getMongoConnection();
     
@@ -483,6 +484,57 @@ router.get('/files/:id', async (req, res) => {
       status: document.status,
       gridfsId: document.gridfsFileId?.toString()
     };
+
+    // Include file content if requested
+    if (includeContent === 'true' && document.gridfsFileId) {
+      try {
+        const bucket = new GridFSBucket(db, { bucketName: 'fs' });
+        
+        // Get file content as buffer
+        const chunks = [];
+        const downloadStream = bucket.openDownloadStream(document.gridfsFileId);
+        
+        await new Promise((resolve, reject) => {
+          downloadStream.on('data', (chunk) => {
+            chunks.push(chunk);
+          });
+          
+          downloadStream.on('end', () => {
+            resolve();
+          });
+          
+          downloadStream.on('error', (error) => {
+            reject(error);
+          });
+        });
+        
+        // Convert to base64
+        const fileBuffer = Buffer.concat(chunks);
+        const base64Content = fileBuffer.toString('base64');
+        
+        // Determine MIME type
+        let mimeType = 'application/octet-stream';
+        const extension = document.documentName.split('.').pop().toLowerCase();
+        if (extension === 'pdf') {
+          mimeType = 'application/pdf';
+        } else if (extension === 'docx') {
+          mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+        } else if (extension === 'doc') {
+          mimeType = 'application/msword';
+        } else if (extension === 'txt') {
+          mimeType = 'text/plain';
+        }
+        
+        // Add content as data URL
+        fileResponse.content = `data:${mimeType};base64,${base64Content}`;
+        
+        console.log(`✅ File content included (${base64Content.length} base64 chars)`);
+      } catch (contentError) {
+        console.error('❌ Error fetching file content from GridFS:', contentError);
+        // Don't fail the entire request, just log the error
+        fileResponse.contentError = 'Failed to fetch file content';
+      }
+    }
 
     res.json({
       success: true,

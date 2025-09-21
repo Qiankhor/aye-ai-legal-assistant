@@ -1137,8 +1137,12 @@ function WorkspaceView({ workspaceViewModel, onFileUpload, onFileOpen }) {
     if (!onFileOpen) return;
 
     try {
+      console.log('Opening file from workspace:', file);
+      
       // Get file content from backend
       const result = await getFileContent(file.id);
+      console.log('File content result:', { success: result.success, hasContent: !!result.file?.content });
+      
       if (result.success && result.file.content) {
         // Convert base64 content back to File object
         const base64Data = result.file.content;
@@ -1171,13 +1175,33 @@ function WorkspaceView({ workspaceViewModel, onFileUpload, onFileOpen }) {
         const fileBlob = new Blob([bytes], { type: mimeType });
         const fileObject = new File([fileBlob], file.name, { type: mimeType });
         
+        console.log('Created file object:', { name: fileObject.name, type: fileObject.type, size: fileObject.size });
+        
         // Call the onFileOpen callback
         onFileOpen(fileObject);
       } else {
-        console.error('Failed to get file content:', result.error);
+        console.error('Failed to get file content:', result.error || 'No content in response');
+        
+        // Show user-friendly error message
+        let errorMessage = 'Unable to open file from workspace.';
+        if (result.file?.contentError) {
+          console.error('Content error:', result.file.contentError);
+          errorMessage = 'File content could not be retrieved from storage.';
+        } else if (result.error) {
+          errorMessage = result.error;
+        }
+        
+        // The error will be handled by showing it in the console for now
+        // In a production app, you might want to show a toast notification
+        console.error('File opening error:', errorMessage);
       }
     } catch (error) {
       console.error('Error opening file:', error);
+      
+      // The error will be handled by showing it in the console for now
+      // In a production app, you might want to show a toast notification
+      const errorMessage = 'An unexpected error occurred while opening the file.';
+      console.error('File opening error:', errorMessage);
     }
   };
 
