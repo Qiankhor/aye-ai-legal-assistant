@@ -17,7 +17,6 @@ import MenuIcon from '@mui/icons-material/Menu';
 import HomeIcon from '@mui/icons-material/Home';
 import ChatIcon from '@mui/icons-material/Chat';
 import DescriptionIcon from '@mui/icons-material/Description';
-import CompareArrowsIcon from '@mui/icons-material/CompareArrows';
 import SettingsIcon from '@mui/icons-material/Settings';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 
@@ -64,7 +63,6 @@ export default function DashboardLayout() {
           <NavItem to="/home" icon={<HomeIcon />} label="Home" onClick={() => setMobileOpen(false)} />
           <NavItem to="/chat" icon={<ChatIcon />} label="Chatbot" onClick={() => setMobileOpen(false)} />
           <NavItem to="/templates" icon={<DescriptionIcon />} label="Templates Library" onClick={() => setMobileOpen(false)} />
-          <NavItem to="/compare" icon={<CompareArrowsIcon />} label="Compare" onClick={() => setMobileOpen(false)} />
         </List>
       </Box>
       <Divider />

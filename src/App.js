@@ -10,7 +10,6 @@ import DashboardLayout from './components/DashboardLayout';
 import HomePage from './pages/HomePage';
 import ChatbotPage from './pages/ChatbotPage';
 import TemplatesPage from './pages/TemplatesPage';
-import ComparePage from './pages/ComparePage';
 import SettingsPage from './pages/SettingsPage';
 import AIWorkspacePage from './pages/AIWorkspacePage';
 import '@fontsource/roboto/300.css';
@@ -50,7 +49,6 @@ function App() {
           } />
           <Route path="workspace" element={<AIWorkspacePage />} />
           <Route path="templates" element={<TemplatesPage />} />
-          <Route path="compare" element={<ComparePage />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="*" element={<Navigate to="/home" replace />} />
         </Route>
