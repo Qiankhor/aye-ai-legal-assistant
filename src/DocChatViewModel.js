@@ -100,27 +100,48 @@ export function useDocChatViewModel() {
       }]);
       return;
     }
+    
     setIsLoading(true);
+    
+    // Add typing indicator immediately
+    const typingIndicatorId = Date.now();
+    setMessages(prev => [...prev, {
+      id: typingIndicatorId,
+      sender: 'bot',
+      text: '...',
+      isTyping: true,
+      timestamp: new Date().toISOString()
+    }]);
+    
     try {
       const response = await axios.post(`http://localhost:3001/api/doc-chat/${sessionId}/ask`, {
         question,
         provider: 'openai'
       });
       if (response.data && response.data.success) {
-        setMessages(prev => [...prev, {
-          sender: 'bot',
-          text: response.data.response,
-          timestamp: response.data.timestamp
-        }]);
+        // Remove typing indicator and add actual response
+        setMessages(prev => prev
+          .filter(msg => msg.id !== typingIndicatorId)
+          .concat([{
+            sender: 'bot',
+            text: response.data.response,
+            timestamp: response.data.timestamp
+          }])
+        );
       } else {
         throw new Error(response.data?.error || 'Ask failed');
       }
     } catch (error) {
       console.error('askQuestion error:', error);
-      setMessages(prev => [...prev, {
-        sender: 'bot',
-        text: '❌ I had trouble answering that against the document.'
-      }]);
+      
+      // Remove typing indicator and add error message
+      setMessages(prev => prev
+        .filter(msg => msg.id !== typingIndicatorId)
+        .concat([{
+          sender: 'bot',
+          text: '❌ I had trouble answering that against the document.'
+        }])
+      );
     } finally {
       setIsLoading(false);
     }

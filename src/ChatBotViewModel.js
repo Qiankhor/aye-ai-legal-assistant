@@ -64,12 +64,25 @@ export function useChatBotViewModel() {
   // Process text message through chat API with workspace context
   const processTextMessage = async (messageText) => {
     setIsLoading(true);
+    
+    // Add typing indicator immediately
+    const typingIndicatorId = Date.now();
+    setMessages(prev => [...prev, {
+      id: typingIndicatorId,
+      sender: 'bot',
+      text: '...',
+      isTyping: true,
+      timestamp: new Date().toISOString()
+    }]);
+    
     try {
-      // Build conversation history
-      const conversationHistory = messages.map(msg => ({
-        sender: msg.sender,
-        text: msg.text
-      }));
+      // Build conversation history (exclude typing indicator)
+      const conversationHistory = messages
+        .filter(msg => !msg.isTyping)
+        .map(msg => ({
+          sender: msg.sender,
+          text: msg.text
+        }));
 
       // Include workspace context
       const response = await axios.post('http://localhost:3001/api/chat', {
@@ -89,22 +102,31 @@ export function useChatBotViewModel() {
       if (response.data.response) {
         const botResponse = response.data.response;
         
-        setMessages(prev => [...prev, {
-          sender: 'bot',
-          text: botResponse,
-          timestamp: response.data.timestamp,
-          workspaceActions: response.data.workspaceActions || []
-        }]);
+        // Remove typing indicator and add actual response
+        setMessages(prev => prev
+          .filter(msg => msg.id !== typingIndicatorId)
+          .concat([{
+            sender: 'bot',
+            text: botResponse,
+            timestamp: response.data.timestamp,
+            workspaceActions: response.data.workspaceActions || []
+          }])
+        );
 
         // Handle workspace actions suggested by the AI
         await handleWorkspaceActions(botResponse, messageText, response);
       }
     } catch (error) {
       console.error('Chat API error:', error);
-      setMessages(prev => [...prev, {
-        sender: 'bot',
-        text: 'I apologize, but I\'m having trouble processing your request right now. Please try again in a moment, or check if your backend services are running.'
-      }]);
+      
+      // Remove typing indicator and add error message
+      setMessages(prev => prev
+        .filter(msg => msg.id !== typingIndicatorId)
+        .concat([{
+          sender: 'bot',
+          text: 'I apologize, but I\'m having trouble processing your request right now. Please try again in a moment, or check if your backend services are running.'
+        }])
+      );
     } finally {
       setIsLoading(false);
     }

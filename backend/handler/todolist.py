@@ -1,5 +1,7 @@
 from http import HTTPStatus
 import boto3
+import uuid
+import datetime
 
 dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
 table = dynamodb.Table('toDoList')
@@ -27,12 +29,21 @@ def lambda_handler(event,context):
                 documentTitle = param['value']
             elif param['name'] == 'status':
                 status = param['value']
+        # Generate unique ID and timestamp
+        todo_id = f"todo-{int(datetime.datetime.now().timestamp() * 1000)}-{str(uuid.uuid4())[:8]}"
+        created_at = datetime.datetime.now().isoformat() + 'Z'
+        
         item = {
-            'emailAddress': emailAddress or 'none provided',
+            'id': todo_id,
+            'task': taskDescription or 'No description provided',
+            'emailAddress': emailAddress or 'default@example.com',
             'taskDescription': taskDescription or 'No description provided',
             'emailContext': emailContext or 'No context provided',
             'documentTitle': documentTitle or 'No document specified',
-            'status': status or 'pending'
+            'status': status or 'pending',
+            'completed': False,
+            'createdAt': created_at,
+            'dueDate': (datetime.datetime.now() + datetime.timedelta(days=7)).strftime('%Y-%m-%d')
         }
         table.put_item(Item=item)
         print('Item saved succesfully')

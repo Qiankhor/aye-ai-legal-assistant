@@ -1,179 +1,303 @@
 import express from 'express';
-import { aiService } from '../services/aiService.js';
-import axios from 'axios';
+import { spawn } from 'child_process';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import persistentAgentService from '../services/persistentAgentService.js';
 
 const router = express.Router();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Smart request queue with session-based rate limiting
+let requestQueue = [];
+let isProcessing = false;
+let sessionLastRequestTime = new Map(); // Track per session
+let globalLastRequestTime = 0;
+const MIN_REQUEST_INTERVAL = 2000; // 2 seconds globally (Nova Micro is much faster)
+const SESSION_MIN_INTERVAL = 1000; // 1 second per session (Nova Micro can handle this)
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes cache
+let responseCache = new Map();
+const USE_PERSISTENT_AGENT = true; // Enable persistent agent for faster responses
 
 /**
- * Process workspace actions from AI response
+ * Filter out repetitive greeting from agent responses
  */
-async function processWorkspaceActions(aiResponse, userMessage, context) {
-  const actions = [];
-  const createdTodos = [];
-  const additionalMessages = [];
-
-  // Enhanced todo detection patterns (more flexible)
-  const todoPatterns = [
-    // Pattern 1: "create a todo for [task]" or "add a task for [task]"
-    /(?:create|add).*?(?:todo|task).*?(?:for|to)\s+(.+?)(?:\.|$)/gi,
-    // Pattern 2: "create a todo: [task]" or "add a task: [task]" (with colon/dash)
-    /(?:create|add).*?(?:todo|task).*?[:\-]\s*(.+?)(?:\.|$)/gi,
-    // Pattern 3: "I suggest creating a todo for [task]"
-    /suggest.*?(?:creating|adding).*?(?:todo|task).*?(?:for|to)\s+(.+?)(?:\.|$)/gi,
-    // Pattern 4: "You should create a todo to [task]"
-    /should.*?(?:create|add).*?(?:todo|task).*?(?:to|for)\s+(.+?)(?:\.|$)/gi,
-    // Pattern 5: Quoted format "create a todo 'task'"
-    /(?:create|add).*?(?:todo|task).*?["']([^"']+)["']/gi,
-    // Pattern 6: "TODO: task" format
-    /(?:TODO|Task)\s*[:\-]\s*(.+?)(?:\.|$)/gi,
-    // Pattern 7: "I'll help you create a todo for [task]"
-    /(?:I'll|I will).*?(?:create|add).*?(?:todo|task).*?(?:for|to)\s+(.+?)(?:\.|$)/gi
-  ];
-
-  // Process todo creation
-  console.log('🔍 Processing AI response for todos:', aiResponse);
-  console.log('🔍 User message:', userMessage);
+function filterRepetitiveGreeting(response) {
+  if (!response || typeof response !== 'string') return response;
   
-  for (const pattern of todoPatterns) {
-    const matches = [...aiResponse.matchAll(pattern)];
-    console.log('🔍 Pattern:', pattern, 'Matches:', matches.length);
-    
-    for (const match of matches) {
-      const taskDescription = match[1]?.trim();
-      console.log('🔍 Extracted task:', taskDescription);
-      if (taskDescription && taskDescription.length > 5 && taskDescription.length < 200) {
-        try {
-          // Create todo directly using the same logic as workspace routes
-          // Import the shared storage from workspace routes
-          const { createTodoDirectly } = await import('./workspaceHelpers.js');
-          
-          const newTodo = await createTodoDirectly({
-            taskDescription: taskDescription,
-            emailAddress: 'default@example.com',
-            emailContext: 'AI created task',
-            documentTitle: 'AI Generated Task'
-          });
-
-          if (newTodo) {
-            createdTodos.push(newTodo);
-            actions.push('todo_created');
-            additionalMessages.push(`✅ I've created a todo: "${taskDescription}"`);
-            console.log('AI auto-created todo:', taskDescription);
-          } else {
-            throw new Error('Failed to create todo');
-          }
-        } catch (error) {
-          console.error('Error auto-creating todo:', error);
-          additionalMessages.push(`❌ Sorry, I couldn't create the todo "${taskDescription}". Please try creating it manually.`);
-        }
-      }
-    }
-    
-    // If we found matches with this pattern, don't try other patterns
-    if (matches.length > 0) break;
+  // Multiple patterns to catch different variations of the greeting
+  const greetingPatterns = [
+    // Main pattern with emojis
+    /Hello!\s*I'm your.*?CRM Assistant\.\s*I can help you with:[\s\S]*?📋.*?Task Management.*?to-do items\s*/i,
+    // Pattern without emojis
+    /Hello!\s*I'm your.*?CRM Assistant\.\s*I can help you with:[\s\S]*?Task Management.*?to-do items\s*/i,
+    // Shorter version
+    /Hello!\s*I'm your.*?CRM Assistant\.[\s\S]*?What can I help you with today\?/i,
+    // Generic assistant intro
+    /I'm your.*?CRM Assistant.*?I can help you with:[\s\S]*?to-do items/i
+  ];
+  
+  let filtered = response;
+  
+  // Apply each pattern
+  for (const pattern of greetingPatterns) {
+    filtered = filtered.replace(pattern, '').trim();
   }
-
-  // Handle cases where user asked for todo creation but no automatic todos were created
-  if (createdTodos.length === 0 && (
-    userMessage.toLowerCase().includes('create todo') || 
-    userMessage.toLowerCase().includes('add task') ||
-    userMessage.toLowerCase().includes('make a todo')
-  )) {
-    actions.push('todo_help');
-    additionalMessages.push(`💡 I can help you create todos! You can either:\n1. Ask me to "create a todo for [task description]"\n2. Use the + button in your workspace\n3. Tell me what you need to do and I'll suggest creating a todo for it`);
+  
+  // Remove any remaining "What can I help you with today?" at the end
+  filtered = filtered.replace(/\n*What can I help you with today\?\s*$/i, '').trim();
+  
+  // If the response is now empty or too short, return a helpful response
+  if (!filtered || filtered.length < 10) {
+    return "How can I help you today?";
   }
-
-  return {
-    actions,
-    createdTodos,
-    additionalMessages
-  };
+  
+  return filtered;
 }
 
 /**
- * Chat endpoint using OpenAI with workspace context support
+ * Generate cache key for request
+ */
+function getCacheKey(message, sessionId) {
+  // Normalize message for caching (remove extra spaces, lowercase)
+  const normalizedMessage = message.toLowerCase().trim().replace(/\s+/g, ' ');
+  return `${normalizedMessage}:${sessionId || 'default'}`;
+}
+
+/**
+ * Check cache for existing response
+ */
+function getCachedResponse(message, sessionId) {
+  const cacheKey = getCacheKey(message, sessionId);
+  const cached = responseCache.get(cacheKey);
+  
+  if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+    console.log(`💾 Cache hit for: ${message.substring(0, 50)}...`);
+    return cached.response;
+  }
+  
+  return null;
+}
+
+/**
+ * Store response in cache
+ */
+function cacheResponse(message, sessionId, response) {
+  const cacheKey = getCacheKey(message, sessionId);
+  responseCache.set(cacheKey, {
+    response: response,
+    timestamp: Date.now()
+  });
+  
+  // Clean old cache entries (keep cache size manageable)
+  if (responseCache.size > 100) {
+    const oldestKey = responseCache.keys().next().value;
+    responseCache.delete(oldestKey);
+  }
+}
+
+/**
+ * Smart queue system with session-based rate limiting
+ */
+async function processRequestQueue() {
+  if (isProcessing || requestQueue.length === 0) {
+    return;
+  }
+
+  isProcessing = true;
+
+  while (requestQueue.length > 0) {
+    const { message, sessionId, enableTrace, resolve, reject } = requestQueue.shift();
+
+    try {
+      // Check cache first
+      const cachedResponse = getCachedResponse(message, sessionId);
+      if (cachedResponse) {
+        resolve(cachedResponse);
+        continue;
+      }
+
+      // Smart rate limiting - check both global and session limits
+      const now = Date.now();
+      const sessionKey = sessionId || 'default';
+      const sessionLastTime = sessionLastRequestTime.get(sessionKey) || 0;
+      
+      const globalWait = Math.max(0, MIN_REQUEST_INTERVAL - (now - globalLastRequestTime));
+      const sessionWait = Math.max(0, SESSION_MIN_INTERVAL - (now - sessionLastTime));
+      
+      // Use the minimum required wait time
+      const waitTime = Math.max(globalWait, sessionWait);
+      
+      if (waitTime > 0) {
+        console.log(`⏳ Smart rate limiting: waiting ${waitTime}ms (global: ${globalWait}ms, session: ${sessionWait}ms)`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      }
+
+      // Update timing trackers
+      const requestTime = Date.now();
+      globalLastRequestTime = requestTime;
+      sessionLastRequestTime.set(sessionKey, requestTime);
+      
+      // Call the agent (use persistent agent if available, fallback to process spawn)
+      let result;
+      if (USE_PERSISTENT_AGENT) {
+        try {
+          result = await persistentAgentService.invokeAgent(message, sessionId, enableTrace);
+          console.log('⚡ Used persistent agent (faster)');
+        } catch (error) {
+          console.log('⚠️ Persistent agent failed, falling back to process spawn');
+          result = await callLegalAgent(message, sessionId, enableTrace);
+        }
+      } else {
+        result = await callLegalAgent(message, sessionId, enableTrace);
+      }
+      
+      // Filter out repetitive greeting if present
+      if (result.response) {
+        result.response = filterRepetitiveGreeting(result.response);
+      }
+      
+      // Cache the response
+      cacheResponse(message, sessionId, result);
+      
+      resolve(result);
+      
+    } catch (error) {
+      reject(error);
+    }
+  }
+
+  isProcessing = false;
+}
+
+/**
+ * Add request to queue
+ */
+function queueAgentRequest(message, sessionId = null, enableTrace = false) {
+  return new Promise((resolve, reject) => {
+    requestQueue.push({ message, sessionId, enableTrace, resolve, reject });
+    processRequestQueue();
+  });
+}
+
+/**
+ * Helper function to call Python legal agent interface
+ */
+async function callLegalAgent(message, sessionId = null, enableTrace = false) {
+  return new Promise((resolve, reject) => {
+    const pythonScriptPath = path.join(__dirname, '../../handler/legal_agent_interface.py');
+    
+    // Prepare arguments for Python script
+    const args = [
+      pythonScriptPath,
+      '--message', message,
+      '--session-id', sessionId || 'default-session',
+      '--enable-trace', enableTrace.toString()
+    ];
+
+    const pythonProcess = spawn('python3', args, {
+      cwd: path.join(__dirname, '../../handler')
+    });
+
+    let stdout = '';
+    let stderr = '';
+
+    pythonProcess.stdout.on('data', (data) => {
+      stdout += data.toString();
+    });
+
+    pythonProcess.stderr.on('data', (data) => {
+      stderr += data.toString();
+    });
+
+    pythonProcess.on('close', (code) => {
+      if (code === 0) {
+        try {
+          console.log('🐍 Python stdout:', stdout);
+          console.log('🐍 Python stderr:', stderr);
+          
+          // Clean the stdout - remove any non-JSON content
+          const lines = stdout.split('\n');
+          let jsonLine = '';
+          
+          // Find the line that looks like JSON
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+              jsonLine = trimmed;
+              break;
+            }
+          }
+          
+          if (!jsonLine) {
+            console.error('❌ No JSON found in Python output');
+            console.error('Raw stdout:', stdout);
+            reject(new Error('No valid JSON response from agent'));
+            return;
+          }
+          
+          // Parse the JSON response from Python
+          const response = JSON.parse(jsonLine);
+          console.log('✅ Parsed Python response:', response);
+          resolve(response);
+        } catch (error) {
+          console.error('❌ Error parsing Python response:', error);
+          console.error('Raw stdout:', stdout);
+          reject(new Error('Failed to parse agent response'));
+        }
+      } else {
+        console.error('❌ Python script error (code:', code, '):', stderr);
+        reject(new Error(`Agent invocation failed: ${stderr}`));
+      }
+    });
+
+    pythonProcess.on('error', (error) => {
+      console.error('Failed to start Python process:', error);
+      reject(new Error('Failed to start legal agent'));
+    });
+  });
+}
+
+/**
+ * Main chat endpoint - Uses Bedrock Agent directly
  */
 router.post('/chat', async (req, res) => {
   try {
-    const { message, conversationHistory = [], context = null } = req.body;
+    const { message, sessionId = null, enableTrace = false } = req.body;
 
     if (!message) {
       return res.status(400).json({ error: 'Message is required' });
     }
 
-    // Check if this is a workspace-enabled chat
-    let enhancedMessage = message;
-    let workspaceActions = [];
-    
-    if (context && context.type === 'workspace') {
-      // Add workspace context to the message
-      const { todos = [], files = [] } = context;
-      
-      let contextInfo = `\n\n[WORKSPACE CONTEXT - You can help with todos and emails]\n`;
-      contextInfo += `Available Actions: Create todos, send emails, analyze files\n`;
-      
-      if (todos.length > 0) {
-        contextInfo += `Current Todos (${todos.length}):\n`;
-        todos.slice(0, 5).forEach((todo, index) => {
-          contextInfo += `${index + 1}. ${todo.task} (${todo.completed ? 'Completed' : 'Pending'})\n`;
-        });
-        if (todos.length > 5) {
-          contextInfo += `... and ${todos.length - 5} more todos\n`;
-        }
-      }
-      
-      if (files.length > 0) {
-        contextInfo += `\nRecent Files (${files.length}):\n`;
-        files.slice(0, 3).forEach((file, index) => {
-          contextInfo += `${index + 1}. ${file.name} (${file.type.toUpperCase()}, ${file.date})\n`;
-        });
-        if (files.length > 3) {
-          contextInfo += `... and ${files.length - 3} more files\n`;
-        }
-      }
-      
-      contextInfo += `\nIMPORTANT: When user asks to create todos, respond with "I'll create a todo for [specific task description]" to automatically create the todo. For emails, provide specific instructions.\n`;
-      contextInfo += `[END CONTEXT]\n\n`;
-      
-      enhancedMessage = message + contextInfo;
-      
-      // Detect potential workspace actions
-      const lowerMessage = message.toLowerCase();
-      if (lowerMessage.includes('todo') || lowerMessage.includes('task') || lowerMessage.includes('remind')) {
-        workspaceActions.push('todo_suggestion');
-      }
-      if (lowerMessage.includes('email') || lowerMessage.includes('send') || lowerMessage.includes('notify')) {
-        workspaceActions.push('email_suggestion');
-      }
-    }
+    console.log(`💬 Chat request queued: ${message.substring(0, 100)}...`);
+    console.log(`📊 Queue status: ${requestQueue.length} requests waiting`);
 
-    const result = await aiService.processChatWithOpenAI(enhancedMessage, conversationHistory);
+    // Add to queue instead of calling directly
+    const agentResponse = await queueAgentRequest(message, sessionId, enableTrace);
     
-    // Process workspace actions automatically if this is a workspace chat
-    if (context && context.type === 'workspace' && result.response) {
-      const processedResult = await processWorkspaceActions(result.response, message, context);
-      result.workspaceActions = processedResult.actions;
-      result.createdTodos = processedResult.createdTodos;
-      result.additionalMessages = processedResult.additionalMessages;
-      
-      console.log('🔍 Processed result:', {
-        actions: processedResult.actions,
-        createdTodos: processedResult.createdTodos,
-        additionalMessages: processedResult.additionalMessages
-      });
-    }
+    console.log('✅ Agent response received');
     
-    res.json(result);
+    res.json({
+      success: true,
+      response: agentResponse.response,
+      sessionId: agentResponse.session_id,
+      timestamp: agentResponse.timestamp,
+      trace: agentResponse.trace_data || null
+    });
+
   } catch (error) {
-    console.error('Chat error:', error);
-    res.status(500).json({ error: 'Error processing chat request' });
+    console.error('❌ Chat error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message || 'Error processing chat request' 
+    });
   }
 });
 
 /**
- * Chat endpoint using AWS Bedrock
+ * Legacy OpenAI endpoint (kept for backward compatibility)
  */
-router.post('/chat-bedrock', async (req, res) => {
+router.post('/chat-openai', async (req, res) => {
   try {
     const { message, conversationHistory = [] } = req.body;
 
@@ -181,11 +305,14 @@ router.post('/chat-bedrock', async (req, res) => {
       return res.status(400).json({ error: 'Message is required' });
     }
 
-    const result = await aiService.processChatWithBedrock(message, conversationHistory);
+    // Import aiService only when needed for legacy support
+    const { aiService } = await import('../services/aiService.js');
+    const result = await aiService.processChatWithOpenAI(message, conversationHistory);
+    
     res.json(result);
   } catch (error) {
-    console.error('Bedrock chat error:', error);
-    res.status(500).json({ error: 'Error processing Bedrock chat request' });
+    console.error('OpenAI chat error:', error);
+    res.status(500).json({ error: 'Error processing OpenAI chat request' });
   }
 });
 

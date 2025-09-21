@@ -44,12 +44,25 @@ export function useWorkspaceAIViewModel(workspaceContext = {}) {
   // Enhanced message processing with workspace context
   const processTextMessage = async (messageText) => {
     setIsLoading(true);
+    
+    // Add typing indicator immediately
+    const typingIndicatorId = Date.now();
+    setMessages(prev => [...prev, {
+      id: typingIndicatorId,
+      sender: 'bot',
+      text: '...',
+      isTyping: true,
+      timestamp: new Date().toISOString()
+    }]);
+    
     try {
-      // Build conversation history
-      const conversationHistory = messages.map(msg => ({
-        sender: msg.sender,
-        text: msg.text
-      }));
+      // Build conversation history (exclude typing indicator)
+      const conversationHistory = messages
+        .filter(msg => !msg.isTyping)
+        .map(msg => ({
+          sender: msg.sender,
+          text: msg.text
+        }));
 
       // Add workspace context to the message
       const contextualMessage = buildContextualMessage(messageText, workspaceContext);
@@ -71,12 +84,16 @@ export function useWorkspaceAIViewModel(workspaceContext = {}) {
       if (response.data.response) {
         const botResponse = response.data.response;
         
-        setMessages(prev => [...prev, {
-          sender: 'bot',
-          text: botResponse,
-          timestamp: response.data.timestamp,
-          actions: extractActionsFromResponse(botResponse)
-        }]);
+        // Remove typing indicator and add actual response
+        setMessages(prev => prev
+          .filter(msg => msg.id !== typingIndicatorId)
+          .concat([{
+            sender: 'bot',
+            text: botResponse,
+            timestamp: response.data.timestamp,
+            actions: extractActionsFromResponse(botResponse)
+          }])
+        );
 
         // Handle backend-processed workspace actions
         console.log('🔍 Frontend received response.data:', response.data);
@@ -109,10 +126,15 @@ export function useWorkspaceAIViewModel(workspaceContext = {}) {
       }
     } catch (error) {
       console.error('Workspace AI error:', error);
-      setMessages(prev => [...prev, {
-        sender: 'bot',
-        text: 'I apologize, but I\'m having trouble accessing your workspace data right now. Please try again in a moment, or check if your backend services are running.'
-      }]);
+      
+      // Remove typing indicator and add error message
+      setMessages(prev => prev
+        .filter(msg => msg.id !== typingIndicatorId)
+        .concat([{
+          sender: 'bot',
+          text: 'I apologize, but I\'m having trouble accessing your workspace data right now. Please try again in a moment, or check if your backend services are running.'
+        }])
+      );
     } finally {
       setIsLoading(false);
     }

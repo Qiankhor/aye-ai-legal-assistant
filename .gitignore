@@ -24,6 +24,22 @@ backend/.env
 backend/deployment-package/
 backend/document-storage-mongodb.zip
 backend/pymongo-layer.zip
+backend/email-handler-with-attachments.zip
+backend/todo-lambda-function.zip
+backend/deploy_*.sh
+backend/test_*.py
+backend/test_*.js
+
+# Lambda deployment packages
+*.zip
+
+# Deployment scripts (optional - comment out if you want to keep them)
+# deploy_*.sh
+
+# Test files
+test_*.py
+test_*.js
+test_*.ipynb
 
 # Python
 __pycache__/
@@ -44,3 +60,55 @@ ENV/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# Logs
+logs/
+*.log
+*.log.*
+
+# Temporary files
+tmp/
+temp/
+.tmp/
+.temp/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage/
+.nyc_output/
+
+# Dependency directories
+node_modules/
+jspm_packages/
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Microbundle cache
+.rpt2_cache/
+.rts2_cache_cjs/
+.rts2_cache_es/
+.rts2_cache_umd/

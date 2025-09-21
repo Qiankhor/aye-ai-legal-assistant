@@ -41,23 +41,29 @@ function ChatBot({
       <div className="chatbot-container">
         <div className="chatbot-messages">
           {messages.map((msg, idx) => (
-            <div key={idx} className={`chatbot-message chatbot-message-${msg.sender}`}>
+            <div key={idx} className={`chatbot-message chatbot-message-${msg.sender} ${msg.isTyping ? 'typing-indicator' : ''}`}>
               {msg.type === 'audio' ? (
                 <div className="audio-message">
                   <audio controls src={msg.audioUrl} />
                   <span>{msg.text}</span>
                 </div>
+              ) : msg.isTyping ? (
+                <div className="typing-dots">
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                </div>
               ) : (
-            <ReactMarkdown 
-              style={{ 
-                whiteSpace: 'pre-wrap', 
-                lineHeight: '1.6',
-                textAlign: msg.sender === 'bot' ? 'left' : 'left'
-              }}
-            >
-              {msg.text}
-            </ReactMarkdown>
-          )}
+                <ReactMarkdown 
+                  style={{ 
+                    whiteSpace: 'pre-wrap', 
+                    lineHeight: '1.6',
+                    textAlign: msg.sender === 'bot' ? 'left' : 'left'
+                  }}
+                >
+                  {msg.text}
+                </ReactMarkdown>
+              )}
             </div>
           ))}
           <div ref={messagesEndRef} />

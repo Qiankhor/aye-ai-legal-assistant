@@ -9,6 +9,8 @@ import uuid
 import json
 import base64
 import os
+import time
+import threading
 from datetime import datetime
 from typing import Optional, Dict, List, Any, Union
 import textwrap
@@ -51,17 +53,32 @@ class LegalAgentInterface:
         # Session management
         self.current_session_id = None
         
-        # Rate limiting (configurable via environment variables)
+        # Enhanced rate limiting (configurable via environment variables)
         self.last_request_time = 0
-        self.min_request_interval = float(os.getenv('MIN_REQUEST_INTERVAL', '3.0'))
-        self.max_retries = int(os.getenv('MAX_RETRIES', '2'))
-        self.retry_delay = float(os.getenv('RETRY_DELAY', '10.0'))
+        # Optimized rate limiting for Nova Micro model (much faster than Titan)
+        self.min_request_interval = float(os.getenv('MIN_REQUEST_INTERVAL', '1.0'))  # Nova Micro can handle 1 second intervals
+        self.max_retries = int(os.getenv('MAX_RETRIES', '3'))
+        self.retry_delay = float(os.getenv('RETRY_DELAY', '5.0'))  # Faster retry for Nova Micro
+        self.exponential_backoff = True
+        
+        # Model-specific optimization
+        self.model_type = 'nova-micro'  # Updated to Nova Micro model
+        
+        # Request queue to prevent concurrent calls
+        self._request_lock = threading.Lock()
+        self._request_queue = []
+        
+        # Throttling statistics
+        self._throttle_count = 0
+        self._successful_requests = 0
         
         print(f"✅ Legal Agent Interface initialized")
         print(f"   Agent ID: {self.agent_id}")
         print(f"   Alias ID: {self.agent_alias_id}")
         print(f"   Region: {self.region}")
-        print(f"   Rate Limit: {self.min_request_interval}s between requests")
+        print(f"   Model: {self.model_type.upper()}")
+        print(f"   Rate Limit: {self.min_request_interval}s between requests (optimized for Nova Micro)")
+        print(f"   🚀 Nova Micro Benefits: Faster responses, higher rate limits, lower latency")
     
     def start_new_session(self) -> str:
         """Start a new conversation session"""
@@ -80,7 +97,7 @@ class LegalAgentInterface:
     def invoke_agent(self, message: str, enable_trace: bool = False, 
                     session_id: Optional[str] = None, width: int = 80) -> Dict[str, Any]:
         """
-        Invoke the Bedrock agent with a message
+        Invoke the Bedrock agent with enhanced rate limiting and retry logic
         
         Args:
             message: User message to send to agent
@@ -94,53 +111,118 @@ class LegalAgentInterface:
         if not session_id:
             session_id = self.get_session_id()
         
-        try:
-            print(f"👤 User: {textwrap.fill(message, width=width)}")
-            print("🤖 Agent: ", end="", flush=True)
-            
-            response = self.bedrock_agent_runtime.invoke_agent(
-                agentId=self.agent_id,
-                agentAliasId=self.agent_alias_id,
-                sessionId=session_id,
-                inputText=message,
-                endSession=False,
-                enableTrace=enable_trace
-            )
-            
-            event_stream = response["completion"]
-            agent_response = ""
-            trace_data = []
-            
-            for event in event_stream:
-                if 'chunk' in event:
-                    chunk_text = event['chunk'].get('bytes', b'').decode('utf-8')
-                    if not enable_trace:
-                        print(chunk_text, end='', flush=True)
-                    agent_response += chunk_text
+        # Use request lock to prevent concurrent calls
+        with self._request_lock:
+            return self._invoke_agent_with_retry(message, enable_trace, session_id, width)
+    
+    def _invoke_agent_with_retry(self, message: str, enable_trace: bool, 
+                                session_id: str, width: int) -> Dict[str, Any]:
+        """Internal method with retry logic and rate limiting"""
+        
+        for attempt in range(self.max_retries + 1):
+            try:
+                # Rate limiting - wait if needed
+                current_time = time.time()
+                time_since_last = current_time - self.last_request_time
+                
+                if time_since_last < self.min_request_interval:
+                    wait_time = self.min_request_interval - time_since_last
+                    print(f"⏳ Rate limiting: waiting {wait_time:.1f}s...")
+                    time.sleep(wait_time)
+                
+                self.last_request_time = time.time()
+                
+                print(f"👤 User: {textwrap.fill(message, width=width)}")
+                print("🤖 Agent: ", end="", flush=True)
+                
+                # Make the actual API call
+                response = self.bedrock_agent_runtime.invoke_agent(
+                    agentId=self.agent_id,
+                    agentAliasId=self.agent_alias_id,
+                    sessionId=session_id,
+                    inputText=message,
+                    endSession=False,
+                    enableTrace=enable_trace
+                )
+                
+                # Process the response
+                event_stream = response["completion"]
+                agent_response = ""
+                trace_data = []
+                
+                for event in event_stream:
+                    if 'chunk' in event:
+                        chunk_text = event['chunk'].get('bytes', b'').decode('utf-8')
+                        if not enable_trace:
+                            print(chunk_text, end='', flush=True)
+                        agent_response += chunk_text
+                        
+                    elif 'trace' in event and enable_trace:
+                        trace_info = self._process_trace_event(event['trace'], width)
+                        trace_data.append(trace_info)
+                
+                print(f"\n📋 Session ID: {session_id}")
+                
+                # Success - reset throttle count and update stats
+                self._successful_requests += 1
+                if self._throttle_count > 0:
+                    print(f"✅ Recovered from throttling after {self._throttle_count} attempts")
+                    self._throttle_count = 0
+                
+                return {
+                    'success': True,
+                    'response': agent_response,
+                    'session_id': session_id,
+                    'trace_data': trace_data if enable_trace else None,
+                    'timestamp': datetime.utcnow().isoformat()
+                }
+                
+            except Exception as e:
+                error_str = str(e)
+                
+                # Check if it's a throttling error
+                if 'throttlingException' in error_str or 'throttling' in error_str.lower():
+                    self._throttle_count += 1
                     
-                elif 'trace' in event and enable_trace:
-                    trace_info = self._process_trace_event(event['trace'], width)
-                    trace_data.append(trace_info)
-            
-            print(f"\n📋 Session ID: {session_id}")
-            
-            return {
-                'success': True,
-                'response': agent_response,
-                'session_id': session_id,
-                'trace_data': trace_data if enable_trace else None,
-                'timestamp': datetime.utcnow().isoformat()
-            }
-            
-        except Exception as e:
-            error_msg = f"Agent invocation failed: {str(e)}"
-            print(f"\n❌ {error_msg}")
-            return {
-                'success': False,
-                'error': error_msg,
-                'session_id': session_id,
-                'timestamp': datetime.utcnow().isoformat()
-            }
+                    if attempt < self.max_retries:
+                        # Calculate exponential backoff delay
+                        if self.exponential_backoff:
+                            delay = self.retry_delay * (2 ** attempt)
+                        else:
+                            delay = self.retry_delay
+                        
+                        print(f"\n⚠️ Throttling detected (attempt {attempt + 1}/{self.max_retries + 1})")
+                        print(f"⏳ Waiting {delay:.1f}s before retry...")
+                        time.sleep(delay)
+                        continue
+                    else:
+                        error_msg = f"Agent throttled after {self.max_retries + 1} attempts. Try again later."
+                        print(f"\n❌ {error_msg}")
+                        return {
+                            'success': False,
+                            'error': error_msg,
+                            'session_id': session_id,
+                            'timestamp': datetime.utcnow().isoformat(),
+                            'throttle_count': self._throttle_count
+                        }
+                else:
+                    # Non-throttling error - don't retry
+                    error_msg = f"Agent invocation failed: {error_str}"
+                    print(f"\n❌ {error_msg}")
+                    return {
+                        'success': False,
+                        'error': error_msg,
+                        'session_id': session_id,
+                        'timestamp': datetime.utcnow().isoformat()
+                    }
+        
+        # Should never reach here
+        return {
+            'success': False,
+            'error': 'Unexpected error in retry logic',
+            'session_id': session_id,
+            'timestamp': datetime.utcnow().isoformat()
+        }
     
     def _process_trace_event(self, trace: Dict, width: int) -> Dict[str, Any]:
         """Process and display trace events"""
@@ -497,35 +579,42 @@ def setup_aws_credentials(access_key: str, secret_key: str, region: str = 'us-ea
     print(f"✅ AWS credentials configured for region: {region}")
 
 if __name__ == "__main__":
-    print("Legal Agent Interface - Usage Examples:")
-    print("=" * 50)
+    import argparse
+    import sys
     
-    # Example usage
-    example_code = '''
-# 1. Setup credentials
-setup_aws_credentials("your-access-key", "your-secret-key")
-
-# 2. Create agent interface
-agent = create_legal_agent("AGENT_ID", "ALIAS_ID")
-
-# 3. Check if agent is ready
-agent.check_agent_status()
-
-# 4. Start a conversation
-response = agent.invoke_agent("Hello, can you help me with legal documents?")
-
-# 5. Save a document
-response = agent.save_document("contract.txt", "This is a sample contract...", "contract")
-
-# 6. List documents
-response = agent.list_documents()
-
-# 7. Add todo task
-response = agent.add_todo_task("Review the new employment contract")
-
-# 8. Analyze a document
-sample_doc = agent.create_sample_document("employment_contract")
-response = agent.analyze_document(sample_doc, "contract")
-'''
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description='Legal Agent Interface CLI')
+    parser.add_argument('--message', required=True, help='Message to send to the agent')
+    parser.add_argument('--session-id', default=None, help='Session ID for conversation')
+    parser.add_argument('--enable-trace', default='false', help='Enable trace output')
     
-    print(example_code)
+    args = parser.parse_args()
+    
+    try:
+        # Create agent interface using environment variables
+        agent = create_legal_agent()
+        
+        # Convert string to boolean
+        enable_trace = args.enable_trace.lower() == 'true'
+        
+        # Invoke the agent
+        response = agent.invoke_agent(
+            message=args.message,
+            session_id=args.session_id,
+            enable_trace=enable_trace
+        )
+        
+        # Output JSON response for Node.js to parse
+        import json
+        print(json.dumps(response))
+        
+    except Exception as e:
+        # Output error as JSON
+        import json
+        error_response = {
+            'success': False,
+            'error': str(e),
+            'timestamp': datetime.utcnow().isoformat()
+        }
+        print(json.dumps(error_response))
+        sys.exit(1)
