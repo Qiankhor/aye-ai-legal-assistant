@@ -13,13 +13,11 @@ export function useWorkspaceViewModel() {
   const [successMessage, setSuccessMessage] = useState(null);
 
   // Todo management
-  const fetchTodos = useCallback(async (retryCount = 0) => {
+  const fetchTodos = useCallback(async () => {
     setIsLoadingTodos(true);
     setError(null);
     try {
-      const response = await axios.get(`${API_BASE_URL}/workspace/todos`, {
-        timeout: 5000 // 5 second timeout
-      });
+      const response = await axios.get(`${API_BASE_URL}/workspace/todos`);
       if (response.data.success) {
         setTodos(response.data.todos);
       } else {
@@ -27,29 +25,24 @@ export function useWorkspaceViewModel() {
       }
     } catch (error) {
       console.error('Error fetching todos:', error);
-      
-      // More specific error messages
-      let errorMessage = 'Failed to load todos';
-      if (error.code === 'ECONNREFUSED' || error.message.includes('Network Error')) {
-        errorMessage = 'Backend server not running. Please start the backend server.';
-      } else if (error.response?.status === 404) {
-        errorMessage = 'Todos endpoint not found. Check backend configuration.';
-      } else if (error.response?.status >= 500) {
-        errorMessage = 'Server error while loading todos. Check backend logs.';
-      } else if (error.response?.data?.error) {
-        errorMessage = `Failed to load todos: ${error.response.data.error}`;
-      }
-      
-      // Retry logic for connection errors
-      if ((error.code === 'ECONNREFUSED' || error.message.includes('Network Error')) && retryCount < 2) {
-        console.log(`Retrying todos fetch... (attempt ${retryCount + 1}/3)`);
-        setTimeout(() => fetchTodos(retryCount + 1), 2000); // Retry after 2 seconds
-        return;
-      }
-      
-      setError(errorMessage);
-      // Start with empty todos if API fails
-      setTodos([]);
+      setError('Failed to load todos');
+      // Fallback to mock data if API fails
+      setTodos([
+        { 
+          id: 1, 
+          task: 'Review NDA clauses for intellectual property risks', 
+          completed: false, 
+          dueDate: '2025-09-22',
+          status: 'pending'
+        },
+        { 
+          id: 2, 
+          task: 'Update employment contract template with new labor laws', 
+          completed: true, 
+          dueDate: '2025-09-20',
+          status: 'completed'
+        }
+      ]);
     } finally {
       setIsLoadingTodos(false);
     }
@@ -134,13 +127,11 @@ export function useWorkspaceViewModel() {
   }, [todos]);
 
   // File management
-  const fetchFiles = useCallback(async (retryCount = 0) => {
+  const fetchFiles = useCallback(async () => {
     setIsLoadingFiles(true);
     setError(null);
     try {
-      const response = await axios.get(`${API_BASE_URL}/workspace/files`, {
-        timeout: 5000 // 5 second timeout
-      });
+      const response = await axios.get(`${API_BASE_URL}/workspace/files`);
       if (response.data.success) {
         setFiles(response.data.files);
       } else {
@@ -148,29 +139,26 @@ export function useWorkspaceViewModel() {
       }
     } catch (error) {
       console.error('Error fetching files:', error);
-      
-      // More specific error messages
-      let errorMessage = 'Failed to load files';
-      if (error.code === 'ECONNREFUSED' || error.message.includes('Network Error')) {
-        errorMessage = 'Backend server not running. Please start the backend server.';
-      } else if (error.response?.status === 404) {
-        errorMessage = 'Files endpoint not found. Check backend configuration.';
-      } else if (error.response?.status >= 500) {
-        errorMessage = 'Server error while loading files. Check backend logs.';
-      } else if (error.response?.data?.error) {
-        errorMessage = `Failed to load files: ${error.response.data.error}`;
-      }
-      
-      // Retry logic for connection errors
-      if ((error.code === 'ECONNREFUSED' || error.message.includes('Network Error')) && retryCount < 2) {
-        console.log(`Retrying files fetch... (attempt ${retryCount + 1}/3)`);
-        setTimeout(() => fetchFiles(retryCount + 1), 2000); // Retry after 2 seconds
-        return;
-      }
-      
-      setError(errorMessage);
-      // Start with empty files if API fails
-      setFiles([]);
+      setError('Failed to load files');
+      // Fallback to mock data if API fails
+      setFiles([
+        { 
+          id: 1, 
+          name: 'NDA_Analysis_Report.pdf', 
+          type: 'pdf', 
+          size: '2.4 MB', 
+          date: '2025-09-20',
+          status: 'active'
+        },
+        { 
+          id: 2, 
+          name: 'Contract_Risk_Assessment.docx', 
+          type: 'docx', 
+          size: '1.8 MB', 
+          date: '2025-09-19',
+          status: 'active'
+        }
+      ]);
     } finally {
       setIsLoadingFiles(false);
     }
