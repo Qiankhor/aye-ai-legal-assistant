@@ -33,9 +33,6 @@ const SUGGESTION_MESSAGES = [
   "Can you create a service agreement template?",
   "I want to draft a loan agreement",
   "Please help me with a copyright assignment form",
-  "Create a todo for reviewing my contract",
-  "Help me send an email about document completion",
-  "What tasks should I prioritize today?"
 ];
 
 export function useChatBotViewModel() {
@@ -61,7 +58,7 @@ export function useChatBotViewModel() {
   const mediaRecorder = useRef(null);
   const audioChunks = useRef([]);
 
-  // Process text message through chat API with workspace context
+  // Process text message through OpenAI chat API with workspace context
   const processTextMessage = async (messageText) => {
     setIsLoading(true);
     
@@ -84,8 +81,8 @@ export function useChatBotViewModel() {
           text: msg.text
         }));
 
-      // Include workspace context
-      const response = await axios.post('http://localhost:3001/api/chat', {
+      // Use OpenAI endpoint instead of Bedrock agent
+      const response = await axios.post('http://localhost:3001/api/chat-openai', {
         message: messageText,
         conversationHistory: conversationHistory,
         context: {
@@ -109,15 +106,14 @@ export function useChatBotViewModel() {
             sender: 'bot',
             text: botResponse,
             timestamp: response.data.timestamp,
+            provider: response.data.provider || 'openai',
             workspaceActions: response.data.workspaceActions || []
           }])
         );
 
-        // Handle workspace actions suggested by the AI
-        await handleWorkspaceActions(botResponse, messageText, response);
       }
     } catch (error) {
-      console.error('Chat API error:', error);
+      console.error('OpenAI Chat API error:', error);
       
       // Remove typing indicator and add error message
       setMessages(prev => prev
@@ -132,42 +128,6 @@ export function useChatBotViewModel() {
     }
   };
 
-  // Handle workspace actions based on AI response (simplified - backend handles todo creation)
-  const handleWorkspaceActions = async (botResponse, userMessage, response) => {
-    const lowerResponse = botResponse.toLowerCase();
-    const lowerUserMessage = userMessage.toLowerCase();
-
-    // Backend now handles todo creation automatically, so we just handle UI-specific actions
-    
-    // Handle backend-processed workspace actions
-    if (response?.data?.createdTodos && response.data.createdTodos.length > 0) {
-      // Refresh todos if available
-      if (fetchTodos) {
-        await fetchTodos();
-      }
-    }
-
-    // Add any additional messages from backend processing
-    if (response?.data?.additionalMessages && response.data.additionalMessages.length > 0) {
-      response.data.additionalMessages.forEach(msg => {
-        setMessages(prev => [...prev, {
-          sender: 'bot',
-          text: msg,
-          timestamp: new Date().toISOString()
-        }]);
-      });
-    }
-
-    // Handle email suggestions (UI-specific)
-    if ((lowerResponse.includes('send email') || lowerResponse.includes('email to') || 
-         lowerUserMessage.includes('email') || lowerUserMessage.includes('send')) && sendEmail) {
-      
-      setMessages(prev => [...prev, {
-        sender: 'bot',
-        text: `📧 I can help you send an email! Please go to the Workspace page to use the email feature, or provide me with the recipient email, subject, and message details.`
-      }]);
-    }
-  };
 
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
