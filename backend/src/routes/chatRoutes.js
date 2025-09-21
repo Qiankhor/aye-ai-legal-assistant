@@ -31,16 +31,11 @@ async function processWorkspaceActions(aiResponse, userMessage, context) {
   ];
 
   // Process todo creation
-  console.log('🔍 Processing AI response for todos:', aiResponse);
-  console.log('🔍 User message:', userMessage);
-  
   for (const pattern of todoPatterns) {
     const matches = [...aiResponse.matchAll(pattern)];
-    console.log('🔍 Pattern:', pattern, 'Matches:', matches.length);
     
     for (const match of matches) {
       const taskDescription = match[1]?.trim();
-      console.log('🔍 Extracted task:', taskDescription);
       if (taskDescription && taskDescription.length > 5 && taskDescription.length < 200) {
         try {
           // Create todo directly using the same logic as workspace routes
@@ -156,11 +151,6 @@ router.post('/chat', async (req, res) => {
       result.createdTodos = processedResult.createdTodos;
       result.additionalMessages = processedResult.additionalMessages;
       
-      console.log('🔍 Processed result:', {
-        actions: processedResult.actions,
-        createdTodos: processedResult.createdTodos,
-        additionalMessages: processedResult.additionalMessages
-      });
     }
     
     res.json(result);

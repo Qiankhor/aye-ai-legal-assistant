@@ -79,18 +79,11 @@ export function useWorkspaceAIViewModel(workspaceContext = {}) {
         }]);
 
         // Handle backend-processed workspace actions
-        console.log('🔍 Frontend received response.data:', response.data);
         if (response.data.createdTodos && response.data.createdTodos.length > 0) {
-          console.log('🔍 Frontend: Found createdTodos, refreshing...', response.data.createdTodos);
           // Refresh todos in workspace context if available
           if (workspaceContext.fetchTodos) {
             await workspaceContext.fetchTodos();
-            console.log('🔍 Frontend: fetchTodos called');
-          } else {
-            console.log('🔍 Frontend: workspaceContext.fetchTodos not available');
           }
-        } else {
-          console.log('🔍 Frontend: No createdTodos found in response');
         }
 
         // Add any additional messages from backend processing
