@@ -42,10 +42,10 @@ const templates = [
 // Function to get color for each category
 const getCategoryColor = (category) => {
   const colorMap = {
-    'Business & Commercial': { color: '#1976d2', backgroundColor: '#e3f2fd' }, // Blue
-    'Tenancy & Property': { color: '#388e3c', backgroundColor: '#e8f5e8' }, // Green
-    'Personal & Family Law': { color: '#f57c00', backgroundColor: '#fff3e0' }, // Orange
-    'Financial & Miscellaneous': { color: '#7b1fa2', backgroundColor: '#f3e5f5' } // Purple
+    'Business & Commercial': { color: '#8b5cf6', backgroundColor: '#f3f0ff' }, // Lavender
+    'Tenancy & Property': { color: '#22c55e', backgroundColor: '#f0fdf4' }, // Green
+    'Personal & Family Law': { color: '#f59e0b', backgroundColor: '#fffbeb' }, // Orange
+    'Financial & Miscellaneous': { color: '#d946ef', backgroundColor: '#fdf4ff' } // Purple-pink
   };
   return colorMap[category] || { color: '#666', backgroundColor: '#f5f5f5' };
 };

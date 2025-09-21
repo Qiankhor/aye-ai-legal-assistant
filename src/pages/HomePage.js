@@ -146,11 +146,11 @@ function AIAgentSidebar({ open, onClose, selectedText, onTextProcessed, onWidthC
         <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <Box sx={{ display: 'flex', alignItems: 'center' }}>
-              <Avatar sx={{ bgcolor: 'secondary.main', mr: 2 }}>
+              <Avatar sx={{ bgcolor: 'primary.main', mr: 2 }}>
                 <AutoAwesomeIcon />
               </Avatar>
               <Box>
-                <Typography variant="h6" sx={{ fontWeight: 600 }}>Chatbot & Guided Q&A</Typography>
+                <Typography variant="h6" sx={{ fontWeight: 600 }}>AYE</Typography>
                 <Typography variant="caption" color="text.secondary">
                   Powered by your AI Legal Assistant
                 </Typography>
@@ -1080,14 +1080,15 @@ export default function HomePage({ chatViewModel }) {
             justifyContent: 'center',
             flexDirection: 'column',
             gap: 3,
-            border: isDragOver ? '3px dashed #1976d2' : '3px dashed #e0e0e0',
+            border: isDragOver ? '3px dashed' : '3px dashed #e0e0e0',
+            borderColor: isDragOver ? 'primary.main' : '#e0e0e0',
             borderRadius: 2,
-            backgroundColor: isDragOver ? 'rgba(25, 118, 210, 0.04)' : 'transparent',
+            backgroundColor: isDragOver ? 'primary.50' : 'transparent',
             transition: 'all 0.3s ease',
             cursor: 'pointer',
             '&:hover': {
-              borderColor: '#1976d2',
-              backgroundColor: 'rgba(25, 118, 210, 0.02)',
+              borderColor: 'primary.main',
+              backgroundColor: 'primary.50',
             }
           }}
           onClick={() => fileInputRef.current?.click()}
@@ -1139,20 +1140,22 @@ export default function HomePage({ chatViewModel }) {
       </Box>
 
       {/* Floating AI Agent Toggle Button */}
-      <Fab
-        color="secondary"
-        aria-label="AI Agent"
-        sx={{
-          position: 'fixed',
-          bottom: 24,
-          right: aiAgentOpen ? `${sidebarWidth + 24}px` : 24,
-          zIndex: 1000,
-          transition: 'right 0.3s ease'
-        }}
-        onClick={() => setAiAgentOpen(true)}
-      >
-        <AutoAwesomeIcon />
-      </Fab>
+      {!aiAgentOpen && (
+        <Fab
+          color="primary"
+          aria-label="AI Agent"
+          sx={{
+            position: 'fixed',
+            bottom: 24,
+            right: 24,
+            zIndex: 1000,
+            transition: 'opacity 0.3s ease'
+          }}
+          onClick={() => setAiAgentOpen(true)}
+        >
+          <AutoAwesomeIcon />
+        </Fab>
+      )}
 
       {/* AI Agent Sidebar */}
       <AIAgentSidebar 

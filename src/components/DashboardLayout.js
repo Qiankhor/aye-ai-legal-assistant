@@ -34,10 +34,7 @@ function NavItem({ to, icon, label, onClick }) {
         onClick={onClick}
         sx={{
           borderRadius: 1,
-          mx: 1,
-          '&.active': {
-            bgcolor: 'action.selected'
-          }
+          mx: 1
         }}
       >
         <ListItemIcon>
@@ -59,7 +56,7 @@ export default function DashboardLayout() {
 
   const drawer = (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <Box sx={{ p: 2, backgroundImage: 'linear-gradient(180deg, rgba(135,206,250,0.15), rgba(255,255,255,0))' }}>
+      <Box sx={{ p: 2, backgroundImage: 'linear-gradient(180deg, rgba(139, 92, 246, 0.15), rgba(255,255,255,0))' }}>
         
       </Box>
       <Divider />
@@ -100,9 +97,6 @@ export default function DashboardLayout() {
         elevation={0}
         sx={{
           zIndex: (theme) => theme.zIndex.drawer + 1,
-          backgroundImage: 'linear-gradient(90deg, #87cefa 0%, #bde3ff 100%)',
-          color: '#0b2340',
-          boxShadow: '0 2px 10px rgba(135,206,250,0.4)',
           width: '100%' // Ensure AppBar spans full width
         }}
       >
@@ -145,10 +139,6 @@ export default function DashboardLayout() {
             '& .MuiDrawer-paper': {
               boxSizing: 'border-box',
               width: drawerWidth,
-              backgroundColor: '#ffffff',
-              backgroundImage: 'linear-gradient(180deg, rgba(135,206,250,0.08), rgba(255,255,255,0))',
-              borderRight: '1px solid',
-              borderColor: 'divider',
               top: '64px', // Position under AppBar
               height: 'calc(100vh - 64px)' // Adjust height
             }
@@ -163,10 +153,6 @@ export default function DashboardLayout() {
             '& .MuiDrawer-paper': {
               boxSizing: 'border-box',
               width: desktopOpen ? drawerWidth : 0,
-              backgroundColor: '#ffffff',
-              backgroundImage: 'linear-gradient(180deg, rgba(135,206,250,0.08), rgba(255,255,255,0))',
-              borderRight: '1px solid',
-              borderColor: 'divider',
               transition: 'width 0.3s ease',
               overflow: 'hidden',
               top: '20px', // Position under AppBar
